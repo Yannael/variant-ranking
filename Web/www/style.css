@@ -1,0 +1,116 @@
+/*.extraspace{
+	height:200px;
+}
+.extraspace2{
+	height:80px;
+}
+
+.extraspace3{
+	height:45px;
+}
+
+textarea {
+    resize: none;
+    width:600px;
+}
+
+#chart2, #chart3 {
+  width: 960px;
+  height: 180px;
+  border: solid 1px #ccc;
+}
+
+#chart2 path, #chart3 line {
+  fill: none;
+  stroke: #333;
+}
+
+#chart3 line {
+  shape-rendering: crispEdges;
+}
+
+#chart4 {
+  margin-left: 40px;
+  height: 506px;
+}
+
+#chart4 .background {
+  fill: #ddd;
+}
+
+#chart4 .dot {
+  stroke: #000;
+}
+
+.axis path, .axis line {
+  fill: none;
+  stroke: #fff;
+  shape-rendering: crispEdges;
+}
+
+.span4 {
+	min-width: 200px;
+	max-width: 200px;
+}
+
+.span8 {
+	min-width: 500px;
+	max-width: 500px;
+
+}
+*/
+
+.extraspace1{
+  height:75px;
+}
+
+.extraspace2{
+  height:20px;
+}
+
+
+
+/*.span10 {
+	min-width: 740px;
+	max-width: 740px;
+
+}*/
+
+.container-fluid {
+	min-width: 1000px;
+	max-width: 1000px;
+	float:none;
+	margin:0 auto;
+}
+/*
+.row-fluid:nth-child(3) {
+	
+	/* background-color: #99D8C9; 
+	*/
+/*}*/
+
+body {
+font-family: Georgia, serif;
+background-color: #282828;
+//font-size: 16px;
+} 
+
+div.container-fluid {
+background-color: #FFFFFF;
+}
+
+//div.col-sm-12 {
+//background-color: #FFFFFF;
+  
+//}
+
+div#tab-4760-1.tab-pane.active {
+//background-color: #FFFFFF;
+  
+}
+
+h1 {
+  font-weight: bold;
+}
+
+
