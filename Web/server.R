@@ -1,4 +1,6 @@
 library(shiny)
+requireNamespace('htmlwidgets')
+library(DT)
 
 shinyServer(function(input, output) {
   sessionvalues <- reactiveValues()
@@ -40,14 +42,19 @@ shinyServer(function(input, output) {
       )
   })
   
-  output$phenotypesTable<-renderDataTable({
-    as.data.frame(sessionvalues$phenotypes[,input$showVarPhenotype])
-  },options = list( 
-    lengthMenu = list(c(10, 25, -1), c('10', '25','All')),pageLength = 10,
-    autoWidth = FALSE,
-    columns.width = list(list(width = "200px", width = "200px",
-                              width = "200px", width = "30px"))#, bFilter=F)
-  )
+  output$phenotypesTable<-DT::renderDataTable({
+    data<-as.data.frame(sessionvalues$phenotypes[,input$showVarPhenotype])
+    datatable(
+      data,rownames=checkboxRows(data),escape= -1,
+      ,options = list(
+        dom='fltip', 
+        lengthMenu = list(c(10, 25, -1), c('10', '25','All')),pageLength = 10,
+        autoWidth = FALSE
+        #columns.width = list(list(width = "200px", width = "200px",
+        #                          width = "200px", width = "30px"))#, bFilter=F)
+      )
+    )
+  }
   )
   
   output$resultsTable<-renderDataTable({
