@@ -61,6 +61,51 @@ mySampleGroups<-list(c("Erasme_Hartsfield","Erasme_Hydrocephalus","Erasme_IGAN",
 save(file="web/mySampleGroups.Rdata",mySampleGroups)
 }
 
+
+getDataHighlander<-function() {
+  #Connect to Highlander DB
+  require(RMySQL)
+  source("../connectHighlander.R")
+  
+  #print(dbListTables(highlanderdb))
+  #dbListFields(highlanderdb, 'exomes_ug')
+  
+  rs = dbSendQuery(highlanderdb, "select distinct patient,pathology from exomes_ug")
+  data = fetch(rs, n=-1)
+  
+  N<-nrow(data)
+  phenotypesErasme<-cbind(rep("Erasme",N),data[,1],data[,2],rep("",N),rep("EUR",N),rep("",N),rep("",N),rep("",N))
+  colnames(phenotypesErasme)<-c("Data source","Sample ID","Pathology", "Gender","Super population","Population", "InSilico ID","Comment")
+  
+  rs = dbSendQuery(highlanderdb, "select patient,chr,pos,read_depth,allelic_depth, from exomes_ug")
+  data = fetch(rs, n=-1)
+  
+  
+  
+}
+
+getPheno1000Genomes<-function() {
+  project<-"caramel-brook-93006"
+  project<-"lyrical-line-92909"
+  require(bigrquery)
+  sql<-"
+  select call.call_set_name as callname
+from [genomics-public-data:1000_genomes_phase_3.variants]
+  where reference_name='17'
+and start=16049958
+  "
+  data<-query_exec(sql,project)  
+
+  sql<-"
+  SELECT
+  COUNT(sample) AS all_samples,
+  SUM(IF(In_Phase1_Integrated_Variant_Set = TRUE, 1, 0)) AS samples_in_variants_table
+FROM
+  [genomics-public-data:1000_genomes.sample_info]"
+  data<-query_exec(sql,project)  
+  
+}
+
 load(file="phenotypes.Rdata")
 phenotypesAll<-rbind(phenotypesErasme,phenotypes1000Gen)
 
