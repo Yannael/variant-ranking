@@ -60,13 +60,18 @@ shinyServer(function(input, output) {
   output$resultsTable<-renderDataTable({
     entriesToSelect<-intersect(sessionvalues$result_filterNCBIGeneIDs,resultsAll[[2]][[2]])
     i.entriesToSelect<-match(entriesToSelect,resultsAll[[2]][[2]])
-    as.data.frame(resultsAll[[2]][[1]][i.entriesToSelect,input$showVarResults])
-  }, escape = FALSE,options = list( 
-    lengthMenu = list(c(10, 25, -1), c('10', '25','All')),pageLength = 10,
-    autoWidth = FALSE,
-    columns.width = list(list(width = "200px", width = "200px",
-                              width = "200px", width = "30px"))#, bFilter=F)
-  )
+    data<-as.data.frame(resultsAll[[2]][[1]][i.entriesToSelect,input$showVarResults])
+    datatable(
+      data,escape=F,
+      ,options = list( 
+        dom='fltip', 
+        lengthMenu = list(c(10, 25, -1), c('10', '25','All')),pageLength = 10,
+        autoWidth = FALSE
+        #columns.width = list(list(width = "200px", width = "200px",
+        #                          width = "200px", width = "30px"))#, bFilter=F)
+      )
+    )
+  }
   )
   
   getOMIM_ID<-function(geneID) {

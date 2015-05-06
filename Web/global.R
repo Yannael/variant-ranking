@@ -77,10 +77,19 @@ getDataHighlander<-function() {
   phenotypesErasme<-cbind(rep("Erasme",N),data[,1],data[,2],rep("",N),rep("EUR",N),rep("",N),rep("",N),rep("",N))
   colnames(phenotypesErasme)<-c("Data source","Sample ID","Pathology", "Gender","Super population","Population", "InSilico ID","Comment")
   
-  rs = dbSendQuery(highlanderdb, "select patient,chr,pos,read_depth,allelic_depth, from exomes_ug")
+  sql<-"
+  select patient,chr,pos,read_depth,allelic_depth_ref,allelic_depth_alt,zygosity,genotype_quality,dbsnp_id_137,dbsnp_id_141,filters
+  from exomes_ug
+  where patient='BAJA-GGCTAC'
+  and chr=17
+  and pos>7460000
+and pos<7480000
+  "
+  rs = dbSendQuery(highlanderdb,sql )
   data = fetch(rs, n=-1)
   
-  
+  data<-data[sort(data$pos,index.r=T)$ix,]
+  save(file="Highlander_BAJA_rs3803800region.Rdata",data)
   
 }
 
@@ -105,6 +114,7 @@ FROM
   data<-query_exec(sql,project)  
   
 }
+
 
 load(file="phenotypes.Rdata")
 phenotypesAll<-rbind(phenotypesErasme,phenotypes1000Gen)
