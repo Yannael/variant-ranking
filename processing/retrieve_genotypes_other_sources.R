@@ -1,47 +1,7 @@
-require(bigrquery)
-require(VariantAnnotation)
-
 project <- "caramel-brook-93006"
 
-#From https://www.ebi.ac.uk/gwas/search?query=iga%20nephropathy
-chromosome<-c("17")
-base_range<-c(7460000,7490000)
 
-list_variants<-c("rs3803800")
-
-getSNPsGoogleGenomics<-function() {
-  DB<-"[genomics-public-data:1000_genomes.variants]"
-    sql<-paste0("
-  SELECT
-  reference_name,
-  start,
-  end,
-  reference_bases,
-  GROUP_CONCAT(alternate_bases) WITHIN RECORD AS alternate_bases,
-  call.call_set_name,
-  GROUP_CONCAT(STRING(call.genotype)) WITHIN call AS genotype
-  FROM ", DB," 
-  WHERE
-  reference_name = '",chromosome,"'
-  AND start BETWEEN ",base_range[1],"
-  AND ",base_range[2],"
-  HAVING
-  alternate_bases IS NOT NULL
-  and call.call_set_name='HG00096'
-  
-ORDER BY
-  start,
-  alternate_bases,
-  call.call_set_name
-  ")
-  data<-query_exec(sql,project)
-data
-  
-}
-
-getSNPsLocalVCF<-function() {
-  
-  path_vcf<-"~/bridge/data/1000genomes/originalVCF/"
+getSNPsErasmeVCF<-function() {
   
   rng <- GRanges(seqnames="17", ranges=IRanges(
     start=c(base_range[1]),
@@ -50,21 +10,10 @@ getSNPsLocalVCF<-function() {
   tab <- TabixFile(paste0(path_vcf,"mod_ALL.chr17.phase3_shapeit2_mvncall_integrated_v5a.20130502.genotypes.vcf.gz"))
   vcf_rng <- readVcf(tab, "hg19", param=rng)
   
-}
-
-getSNPsErasmeVCF<-function() {
-  
-  rng <- GRanges(seqnames="17", ranges=IRanges(
-         start=c(base_range[1]),
-         end=c(base_range[2]),
-         names=c("range_analysis")))
-  tab <- TabixFile(paste0(path_vcf,"mod_ALL.chr17.phase3_shapeit2_mvncall_integrated_v5a.20130502.genotypes.vcf.gz"))
-  vcf_rng <- readVcf(tab, "hg19", param=rng)
-  
   pheno<-read.table("~/bridge/data/erasme/dataset1/Erasme.exomes.id.csv",sep=";",header=T,stringsAsFactors=F)
   i_igan<-which(pheno$Disease=="IGAN")
   names_vcf<-paste0("~/bridge/data/erasme/dataset1/F",pheno$InSilicoDB.id[i_igan],"_hc_all_recalibrated_variants.vcf.gz")
-
+  
   name_vcf<-names_vcf[1]
   #BAJA
   name_vcf<-"~/bridge/data/erasme/dataset1/FISDBM261950_hc_all_recalibrated_variants.vcf.gz"
@@ -113,8 +62,59 @@ getSNPsErasmeVCF<-function() {
     variants.control<-rownames(GT)
     vv<-intersect(variants.patho,variants.control)
   }
-  
-  
+}
+
+getSNPsGoogleGenomics<-function() {
+  DB<-"[genomics-public-data:1000_genomes.variants]"
+  sql<-paste0("
+              SELECT
+              reference_name,
+              start,
+              end,
+              reference_bases,
+              GROUP_CONCAT(alternate_bases) WITHIN RECORD AS alternate_bases,
+              call.call_set_name,
+              GROUP_CONCAT(STRING(call.genotype)) WITHIN call AS genotype
+              FROM ", DB," 
+              WHERE
+              reference_name = '",chromosome,"'
+              AND start BETWEEN ",base_range[1],"
+              AND ",base_range[2],"
+              HAVING
+              alternate_bases IS NOT NULL
+              and call.call_set_name='HG00096'
+              
+              ORDER BY
+              start,
+              alternate_bases,
+              call.call_set_name
+              ")
+  data<-query_exec(sql,project)
+  data
   
 }
+
+
+getPheno1000GenomesGoogle<-function() {
+  project<-"caramel-brook-93006"
+  project<-"lyrical-line-92909"
+  require(bigrquery)
+  sql<-"
+  select call.call_set_name as callname
+from [genomics-public-data:1000_genomes_phase_3.variants]
+  where reference_name='17'
+and start=16049958
+  "
+  data<-query_exec(sql,project)  
+  
+  sql<-"
+  SELECT
+  COUNT(sample) AS all_samples,
+  SUM(IF(In_Phase1_Integrated_Variant_Set = TRUE, 1, 0)) AS samples_in_variants_table
+FROM
+  [genomics-public-data:1000_genomes.sample_info]"
+  data<-query_exec(sql,project)  
+  
+}
+
 
