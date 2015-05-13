@@ -66,6 +66,8 @@ getSNPsErasmeVCF<-function() {
   names_vcf<-paste0("~/bridge/data/erasme/dataset1/F",pheno$InSilicoDB.id[i_igan],"_hc_all_recalibrated_variants.vcf.gz")
 
   name_vcf<-names_vcf[1]
+  #BAJA
+  name_vcf<-"~/bridge/data/erasme/dataset1/FISDBM261950_hc_all_recalibrated_variants.vcf.gz"
   
   rng <- GRanges(seqnames="17", ranges=IRanges(
     start=c(base_range[1]),
@@ -73,6 +75,33 @@ getSNPsErasmeVCF<-function() {
     names=c("range_analysis")))
   tab <- TabixFile(name_vcf)
   vcf <- readVcf(name_vcf, "hg19")
+  
+  name_vcf<-"~/bridge/data/erasme/dataset1/FISDBM261950_hc_all_recalibrated_variants.vcf.gz"
+  vcf <- readVcf(name_vcf, "hg19")
+  
+  data<-rowData(vcf_rng)
+  #i.keep<-which((seqnames(data)=="chr17") & (ranges(data)@start>7460000) & (ranges(data)@start <7480000))
+  alt1<-which(sapply(info(vcf_rng)$AF,length)==1)
+  i.keep<-which((seqnames(data)=="17") & (ranges(data)@start>7460000) & (ranges(data)@start <7480000) )
+  i.keep<-intersect(i.keep,alt1)
+  i.keep<-which(unlist(info(vcf_rng)$AF[i.keep])>0.01)
+  
+  dataRanges<-data[i.keep,]
+  start<-ranges(data[i.keep,])@start
+  wdth<-ranges(data[i.keep,])@width
+  rsnames<-names(data[i.keep,])
+  refchr<-as.character(ref(vcf_rng)[i.keep])
+  altchr<-as.character(unlist(alt(vcf_rng)[i.keep]))
+  genoGT<-(geno(vcf_rng)$GT[i.keep,])
+  #genoAD<-(geno(vcf)$AD[i.keep,1])
+  #genoDP<-(geno(vcf)$DP[i.keep,1])
+  #genoGQ<-(geno(vcf)$GQ[i.keep,1])
+  #genoPL<-(geno(vcf)$PL[i.keep,1])
+  
+  #DF<-cbind(start,wdth,rsnames,refchr,altchr,genoGT,genoAD,genoDP,genoGQ,genoPL)
+  DF<-cbind(start,wdth,rsnames,refchr,genoGT)
+  
+  
   
   load("snps.erasme.Rdata")
   
