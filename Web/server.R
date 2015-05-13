@@ -1,4 +1,6 @@
 library(shiny)
+requireNamespace('htmlwidgets')
+library(DT)
 
 shinyServer(function(input, output) {
   sessionvalues <- reactiveValues()
@@ -40,26 +42,33 @@ shinyServer(function(input, output) {
       )
   })
   
-  output$phenotypesTable<-renderDataTable({
-    as.data.frame(sessionvalues$phenotypes[,input$showVarPhenotype])
-  },options = list( 
-    lengthMenu = list(c(10, 25, -1), c('10', '25','All')),pageLength = 10,
-    autoWidth = FALSE,
-    columns.width = list(list(width = "200px", width = "200px",
-                              width = "200px", width = "30px"))#, bFilter=F)
-  )
+  output$phenotypesTable<-DT::renderDataTable({
+    data<-as.data.frame(sessionvalues$phenotypes[,input$showVarPhenotype])
+    datatable(
+      data,escape= -1, rownames=F#checkboxRows(data),
+      ,filter='top', 
+      options = list(
+        dom='fltip', 
+        lengthMenu = list(c(10, 25, -1), c('10', '25','All')),pageLength = 10,
+        autoWidth = T,columnDefs = list(list(sClass="alignRight",aTargets="_all"))
+      )
+    )
+  }
   )
   
   output$resultsTable<-renderDataTable({
     entriesToSelect<-intersect(sessionvalues$result_filterNCBIGeneIDs,resultsAll[[2]][[2]])
     i.entriesToSelect<-match(entriesToSelect,resultsAll[[2]][[2]])
-    as.data.frame(resultsAll[[2]][[1]][i.entriesToSelect,input$showVarResults])
-  }, escape = FALSE,options = list( 
-    lengthMenu = list(c(10, 25, -1), c('10', '25','All')),pageLength = 10,
-    autoWidth = FALSE,
-    columns.width = list(list(width = "200px", width = "200px",
-                              width = "200px", width = "30px"))#, bFilter=F)
-  )
+    data<-as.data.frame(resultsAll[[2]][[1]][i.entriesToSelect,input$showVarResults])
+    datatable(
+      data,escape=F,
+      ,options = list( 
+        dom='fltip', 
+        lengthMenu = list(c(10, 25, -1), c('10', '25','All')),pageLength = 10,
+        autoWidth = T
+      )
+    )
+  }
   )
   
   getOMIM_ID<-function(geneID) {

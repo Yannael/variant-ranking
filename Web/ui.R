@@ -39,7 +39,7 @@ shinyUI(fluidPage(
                         ),
                         column(9,
                                div(
-                                 dataTableOutput('phenotypesTable'),
+                                 DT::dataTableOutput('phenotypesTable'),
                                  tags$style(type="text/css", '.shiny-datatable-output tfoot {display:table-header-group;}')
                                  , style = 'width:690px;')
                         )

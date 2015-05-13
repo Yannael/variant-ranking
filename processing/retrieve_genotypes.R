@@ -5,7 +5,7 @@ project <- "caramel-brook-93006"
 
 #From https://www.ebi.ac.uk/gwas/search?query=iga%20nephropathy
 chromosome<-c("17")
-base_range<-c(7460000,7480000)
+base_range<-c(7460000,7490000)
 
 list_variants<-c("rs3803800")
 
