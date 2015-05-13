@@ -96,5 +96,7 @@ dummy<-function() {
   variantMat1<-getGenoFromSNPsInfos(SNPsInfos1)
   variantMat2<-getGenoFromSNPsInfos(SNPsInfos2)
   
+  save(file="Web/variantMat.Rdata",variantMat1,variantMat2)
+  
 }
 
