@@ -22,7 +22,7 @@ getPosFromGene<-function(geneID) {
 
 #From https://www.ebi.ac.uk/gwas/search?query=iga%20nephropathy
 chromosome<-c("17")
-base_range<-c(7460000,7490000)
+base_range<-c(7440000,7490000)
 
 list_variants<-c("rs3803800")
 
@@ -42,10 +42,16 @@ getSNPsLocalVCF1000Genomes<-function(chr, range, patients) {
 }
 
 
-getSNPsInfosHighlander<-function(chromosome,base_range, samples) {
+getSNPsInfosHighlander<-function(samples,chromosome=NULL,base_range=NULL) {
+  
+  if (is.null(chromosome)) chr_select<-""
+  else chr_select<-paste0("and chr=",chromosome)
+  
+  if (is.null(base_range)) base_range_select<-""
+  else base_range_select<-paste0("and pos>=",base_range[1]," and pos<=",base_range[2])
   
   require(RMySQL)
-  source("../connectHighlander.R")
+  source("../../connectHighlander.R")
   
   samples_select<-paste(samples,collapse="' OR patient='")
   
@@ -53,50 +59,47 @@ getSNPsInfosHighlander<-function(chromosome,base_range, samples) {
   select 
   patient,chr,pos,read_depth,
   allelic_depth_ref,allelic_depth_alt,
-  zygosity,genotype_quality,dbsnp_id_137,
+  zygosity,genotype_quality,
+  gene_ensembl, num_genes,clinvar_rs,
+  dbsnp_id_137,
   dbsnp_id_141,filters,cadd_phred,cadd_raw,vest_score
   from exomes_ug
-  where (patient='", samples_select,"') 
-  and chr=",chromosome,"
-  and pos>",base_range[1],"
-and pos<",base_range[2])
+  where (patient='", samples_select,"') ",
+              chr_select,
+              base_range_select
+  )
   
   rs = dbSendQuery(highlanderdb,sql )
   data = fetch(rs, n=-1)
   
-  id<-paste(data[,"chr"], data[,"pos"],sep="_")
-  data<-cbind(id=id,data)
-  data[,'id']<-as.character(data[,'id'])
-  data<-data[sort(data[,'id'],index.r=T)$ix,]
+  dbClearResult(rs)
+  dbDisconnect(highlanderdb)
   
   data
 }
 
-getGenoFromSNPsInfos<-function(SNPsInfos) {
-  
-  geno<-table(SNPsInfos[,"patient"],SNPsInfos[,'id'])
-  hetero.id<-which(SNPsInfos[,'zygosity']=="Heterozygous")
-  if (length(hetero.id)>0) {
-    for (i in 1:length(hetero.id)) {
-      geno[SNPsInfos[hetero.id[i],"patient"],SNPsInfos[hetero.id[i],"id"]]<-2
-    }
-  }
-  
-  geno
-  
-}
 
-dummy<-function() {
+createSNPsHighlanderDB<-function() {
+  #Load all data from Erasme trios. 
   
   load(file="web/mySampleGroups.Rdata")
   
-  SNPsInfos1<-getSNPsInfosHighlander(chromosome, base_range,mySampleGroups[[2]][[1]])#Patho
-  SNPsInfos2<-getSNPsInfosHighlander(chromosome, base_range,mySampleGroups[[2]][[2]])#Control
+  system.time(
+    SNPs_patho<-getSNPsInfosHighlander(mySampleGroups[[2]][[1]]) #Patho
+  )
+  system.time(
+    SNPs_control<-getSNPsInfosHighlander(mySampleGroups[[2]][[2]]) #Control
+  )
   
-  variantMat1<-getGenoFromSNPsInfos(SNPsInfos1)
-  variantMat2<-getGenoFromSNPsInfos(SNPsInfos2)
   
-  save(file="Web/variantMat.Rdata",variantMat1,variantMat2)
+  system.time({
+    con <- dbConnect(RSQLite::SQLite(), "highlander.db")
+    dbWriteTable(con,"patho",SNPs_patho,overwrite=T)
+    dbWriteTable(con,"control",SNPs_control,overwrite=T)
+    dbDisconnect(con)
+  })
   
 }
+
+
 
