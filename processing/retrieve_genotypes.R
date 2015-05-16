@@ -91,9 +91,22 @@ createSNPsHighlanderDB<-function() {
     SNPs_control<-getSNPsInfosHighlander(mySampleGroups[[2]][[2]]) #Control
   )
   
+  chr<-SNPs_patho[,"chr"]
+  pos<-SNPs_patho[,"pos"]
+  id_SNPs_patho<-paste(chr,pos,sep=":")
+  SNPs_patho$Locus<-id_SNPs_patho
+  
+  chr<-SNPs_control[,"chr"]
+  pos<-SNPs_control[,"pos"]
+  id_SNPs_control<-paste(chr,pos,sep=":")
+  SNPs_control$Locus<-id_SNPs_control
+  
+  id_control_to_remove<-setdiff(id_SNPs_control,id_SNPs_patho)
+  i<-which(id_SNPs_control %in% id_control_to_remove)
+  if (length(i)>0) SNPs_control<-SNPs_control[-i,]
   
   system.time({
-    con <- dbConnect(RSQLite::SQLite(), "highlander.db")
+    con <- dbConnect(RSQLite::SQLite(), "groupsToComparePartial.db")
     dbWriteTable(con,"patho",SNPs_patho,overwrite=T)
     dbWriteTable(con,"control",SNPs_control,overwrite=T)
     dbDisconnect(con)

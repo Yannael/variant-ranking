@@ -26,7 +26,7 @@ getPheno1000Genome<-function() {
 getPhenoHighlander<-function() {
   #Connect to Highlander DB
   require(RMySQL)
-  source("../connectHighlander.R")
+  source("../../connectHighlander.R")
   
   #print(dbListTables(highlanderdb))
   #dbListFields(highlanderdb, 'exomes_ug')
