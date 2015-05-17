@@ -105,6 +105,14 @@ createSNPsHighlanderDB<-function() {
   i<-which(id_SNPs_control %in% id_control_to_remove)
   if (length(i)>0) SNPs_control<-SNPs_control[-i,]
   
+  
+  dbSNPs<-SNPs_patho[,c('Locus','gene_ensembl', 'num_genes','clinvar_rs','dbsnp_id_137',
+                     'dbsnp_id_141','filters','cadd_phred','cadd_raw','vest_score')]
+  
+  SNPs_patho<-SNPs_patho[,c("patient","Locus","read_depth","zygosity")]
+  SNPs_control<-SNPs_patho[,c("patient","Locus","read_depth","zygosity")]
+  
+  
   system.time({
     con <- dbConnect(RSQLite::SQLite(), "groupsToComparePartial.db")
     dbWriteTable(con,"patho",SNPs_patho,overwrite=T)
