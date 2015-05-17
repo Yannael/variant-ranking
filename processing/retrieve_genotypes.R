@@ -110,8 +110,7 @@ createSNPsHighlanderDB<-function() {
                      'dbsnp_id_141','filters','cadd_phred','cadd_raw','vest_score')]
   
   SNPs_patho<-SNPs_patho[,c("patient","Locus","read_depth","zygosity")]
-  SNPs_control<-SNPs_patho[,c("patient","Locus","read_depth","zygosity")]
-  
+  SNPs_control<-SNPs_control[,c("patient","Locus","read_depth","zygosity")]
   
   system.time({
     con <- dbConnect(RSQLite::SQLite(), "groupsToComparePartial.db")
