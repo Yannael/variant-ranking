@@ -14,18 +14,11 @@ priorlist<-c("TUBB2A","TCL1A","BRDG1","HTPAP","PPPAPDC1B","IGKV4","IGLL1",
 
 geneIDs<-c("TUBB2A","TCL1A")
 
-getPosFromGene<-function(geneID) {
-  
-  
-  
-}
-
 #From https://www.ebi.ac.uk/gwas/search?query=iga%20nephropathy
 chromosome<-c("17")
 base_range<-c(7440000,7490000)
 
 list_variants<-c("rs3803800")
-
 
 getSNPsLocalVCF1000Genomes<-function(chr, range, patients) {
   #To update for selecting chr range patients fields
@@ -116,6 +109,7 @@ createSNPsHighlanderDB<-function() {
     con <- dbConnect(RSQLite::SQLite(), "groupsToComparePartial.db")
     dbWriteTable(con,"patho",SNPs_patho,overwrite=T)
     dbWriteTable(con,"control",SNPs_control,overwrite=T)
+    dbWriteTable(con,"dbSNPs",dbSNPs,overwrite=T)
     dbDisconnect(con)
   })
   
