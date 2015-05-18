@@ -104,12 +104,20 @@ retrieveRefEntries<-function() {
   
   snpsMat<-NULL
   
-  for (chr in 3:21) {
+  for (chr in 1:21) {
     print(chr)
     st<-system.time(snpsMat<-rbind(snpsMat,retrieveRefEntriesChr(paste0("chr",chr),patho,control)))
     print(st)
                    
   }
+  
+  rs<-dbSendQuery(congroups,"select * from dbSNPs" )
+  dbSNPs<-fetch(rs, n=-1)
+  
+  mapping_gene<-match(rownames(snpsMat),dbSNPs$Locus)
+  rownames_extended<-paste(dbSNPs$gene_ensembl[mapping_gene],rownames(snpsMat),sep="_")
+  rownames(snpsMat)<-rownames_extended
+  snpsMat<-snpsMat[sort(rownames(snpsMat),index.return=T)$ix,]
   
   patient_patho<-unique(patho$patient)
   match.patient<-match(patient_patho,colnames(snpsMat))
