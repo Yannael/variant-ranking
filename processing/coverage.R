@@ -14,22 +14,10 @@ createCoverageDB<-function() {
     #Takes about 2 minutes
     system.time(CoverageTab<-read.table(filename,header=T))
     
-    #Retrieve chr and pos data in two different columns
-    #Maybe not the most efficient way, takes about 3 minutes
-    #system.time({
-    #  chr_pos<-matrix(unlist(apply(CoverageTab[,1,drop=F],1,strsplit,":")),nrow(CoverageTab),2,byrow=T)
-    #})
-    
-    #10s
-    #system.time({
-    #  CoverageTab<-cbind(chr=chr_pos[,1],pos=chr_pos[,2],CoverageTab)
-    #})
-    
     #30s
     system.time({
       dbWriteTable(con,paste0("chr",num),CoverageTab,overwrite=T)
     })
-    
   }
   
   dbDisconnect(con)
@@ -55,8 +43,43 @@ getMappingZH_ISDBM<-function() {
     name<-colnames(ss[1:15,c(1,which.max(cor(ss[,1],ss[,2:ncol(ss)]))+1)])[2]
     ISid<-c(ISid,strsplit(name,"_for_")[[1]][2])
   }
+
+}
+
+retrieveRefEntriesChr<-function(chr,patho,control) {
   
+  #2s
+  system.time({
+    rs<-dbSendQuery(concoverage,paste("select Average_Depth_sample from ",chr))
+    avg_depth = fetch(rs, n=-1)
+  })
+  thresh<-median(avg_depth[,1])
   
+  #30s
+  system.time({
+    rs<-dbSendQuery(concoverage,paste0("select * from locus_snps,",chr," where locus_snps.Locus=",chr,".Locus"))
+    coverage<-fetch(rs, n=-1)
+  })
+  
+  snpsMat<-coverage[,5:37]
+  ISDBMid<-as.vector(unlist(sapply(colnames(snpsMat),substr,11,21)))
+  mapping<-read.table('mappingZH_ISDBM.txt',stringsAsFactors=F)
+  i<-match(ISDBMid,mapping[,2])
+  colnames(snpsMat)<-mapping[i,1]
+  rownames(snpsMat)<-coverage$Locus
+  
+  snpsMat[snpsMat<thresh]<-NA
+  snpsMat[snpsMat>=thresh]<-0
+  
+  select.entry.homozygous<-which((patho$Locus %in% coverage$Locus) & (patho$zygosity=="Homozygous"))
+  for (i in select.entry.homozygous) 
+    snpsMat[patho$Locus[i],patho$patient[i]]<-2
+  
+  select.entry.heterozygous<-which((patho$Locus %in% coverage$Locus) & (patho$zygosity=="Heterozygous"))
+  for (i in select.entry.heterozygous) 
+    snpsMat[patho$Locus[i],patho$patient[i]]<-1
+  
+  snpsMat
 }
 
 retrieveRefEntries<-function() {
@@ -79,53 +102,34 @@ retrieveRefEntries<-function() {
   colnames(locusSNPs)<-"Locus"
   dbWriteTable(concoverage,"locus_snps",locusSNPs,overwrite=T)
   
-  #2s
-  system.time({
-    rs<-dbSendQuery(con,"select Average_Depth_sample from chr17")
-    avg_depth = fetch(rs, n=-1)
-  })
-  thresh<-median(avg_depth[,1])
+  snpsMat<-NULL
   
-  #30s
-  system.time({
-  rs<-dbSendQuery(concoverage,"select * from locus_snps,chr17 where locus_snps.Locus=chr17.Locus")
-  coverage<-fetch(rs, n=-1)
-  })
+  for (chr in 1:21) {
+    print(chr)
+    st<-system.time(snpsMat<-rbind(snpsMat,retrieveRefEntriesChr(paste0("chr",chr),patho,control)))
+    print(st)
+                   
+  }
   
-  snpsMat<-coverage[,5:37]
-  ISDBMid<-as.vector(unlist(sapply(colnames(snpsMat),substr,11,21)))
-  mapping<-read.table('mappingZH_ISDBM.txt',stringsAsFactors=F)
-  i<-match(ISDBMid,mapping[,2])
-  colnames(snpsMat)<-mapping[i,1]
-  rownames(snpsMat)<-coverage$Locus
+  rs<-dbSendQuery(congroups,"select * from dbSNPs" )
+  dbSNPs<-fetch(rs, n=-1)
   
-  snpsMat[snpsMat<thresh]<-NA
-  snpsMat[snpsMat>=thresh]<-0
+  mapping_gene<-match(rownames(snpsMat),dbSNPs$Locus)
+  rownames_extended<-paste(dbSNPs$gene_ensembl[mapping_gene],rownames(snpsMat),sep="_")
+  rownames(snpsMat)<-rownames_extended
+  snpsMat<-snpsMat[sort(rownames(snpsMat),index.return=T)$ix,]
   
-  select.entry.homozygous<-which((patho$Locus %in% coverage$Locus) & (patho$zygosity=="Homozygous"))
-  snpsMat[patho$Locus[select.entry.homozygous],patho$patient[select.entry.homozygous]]<-2
+  patient_patho<-unique(patho$patient)
+  match.patient<-match(patient_patho,colnames(snpsMat))
+  patient_patho<-paste(patient_patho,"Patho",sep=":")
+  colnames(snpsMat)[match.patient]<-patient_patho
   
-  select.entry.heterozygous<-which((patho$Locus %in% coverage$Locus) & (patho$zygosity=="Heterozygous"))
-  snpsMat[patho$Locus[select.entry.heterozygous],patho$patient[select.entry.heterozygous]]<-1
+  patient_control<-unique(control$patient)
+  match.patient<-match(patient_control,colnames(snpsMat))
+  patient_control<-paste(patient_control,"Control",sep=":")
+  colnames(snpsMat)[match.patient]<-patient_control
   
-}
-
-dummy<-function() {
-  system.time({
-    rs<-dbSendQuery(con,"select * from chr17")
-    data = fetch(rs, n=-1)
-  })
-  
-  #Locus Total_Depth Average_Depth_sample Depth_for_ISDBM379928 Depth_for_ISDBM379929
-  #1 17:6011        1171                35.48                    28                    25
-  #Depth_for_ISDBM379930 Depth_for_ISDBM379931 Depth_for_ISDBM379932 Depth_for_ISDBM379933
-  
-  system.time({
-    rs<-dbSendQuery(con,"select Average_Depth_sample from chr17")
-    avg_depth = fetch(rs, n=-1)
-  })
-  
-  dbClearResult(rs)
-  
+  save(file="../../snpsMat.Rdata",snpsMat)
+  write.table(file="../../snpsMat.txt",snpsMat)
   
 }
