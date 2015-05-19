@@ -1,4 +1,6 @@
-source("/home/jpoullet/Rscript/testing/config.R")
+Sys.setenv(HADOOP_CMD="/usr/bin/hadoop",
+           HADOOP_STREAMING="/opt/cloudera/parcels/CDH-5.1.3-1.cdh5.1.3.p0.12/lib/hadoop-0.20-mapreduce/contrib/streaming/hadoop-streaming-2.3.0-mr1-cdh5.1.3.jar")
+
 library('rhdfs')
 library('rmr2')
 hdfs.init()
@@ -52,32 +54,17 @@ entropy.tab<-function(tab){
   sum(px[w]*H,na.rm=TRUE)
 }
 
-createData<-F
+createData<-T
 if (createData) {
 prof.init<-system.time({
-  load("Web/variantMat.Rdata")
+  load("../snpsMat.Rdata")
   
-  rs<-colnames(variantMat1)
-  rs2<-colnames(variantMat2)
+  #alldata.i<-which(!is.na(apply(snpsMat,1,sum)))
+  #snpsMat<-snpsMat[alldata.i,]
   
-  #We are only interested in variants in pathological population (pop1)
-  variantMat2_aligned<-matrix(NA,nrow(variantMat2),ncol(variantMat1))
-  subsetColMat2<-intersect(rs2,rs)
-
-  matchMat2Mat1<-match(subsetColMat2,rs)
+  snpsMat<-snpsMat[1:10000,]
   
-  variantMat2_aligned[,matchMat2Mat1]<-variantMat2[,subsetColMat2]
-  
-  rownames(variantMat1)<-rep("patho",nrow(variantMat1))
-  rownames(variantMat2_aligned)<-rep("control",nrow(variantMat2))
-  
-  rs.geno.matrix.expe<-rbind(variantMat1,variantMat2_aligned)
-  genes<-paste("gene",1:length(rs),sep="")
-  idkeys<-paste0(genes,"_keysplit_",rs)
-  
-  colnames(rs.geno.matrix.expe)<-idkeys
-  
-  prof.savehdfs<-system.time(to.dfs(t(rs.geno.matrix.expe),output=hdfsfile))
+  prof.savehdfs<-system.time(to.dfs(snpsMat,output=hdfsfile))
   
 })
 }
@@ -103,10 +90,12 @@ reduce =   function(k, v) {
   pv<-1
   st<-10
   
-  if (sum(tab["case",])>(length(cases)/2) & sum(tab["ctrl",])>0){    
-    ttest<- prop.trend.test(tab["case",], margin.table(tab,2))
-    pv<-ttest$p.value ##pvalue(IT) ##c(L.case,L.control))
-  }
+  #if (sum(tab["case",])>(length(cases)/2) & sum(tab["ctrl",])>0){    
+  #  ttest<- prop.trend.test(tab["case",], margin.table(tab,2))
+  #  pv<-ttest$p.value ##pvalue(IT) ##c(L.case,L.control))
+  #}
+  pv<-0
+  
   st<-entropy.tab(tab) #CHANGE was info.tab
   delta<--10
   if (all(apply(tab,1,sum)>0)){
@@ -122,18 +111,23 @@ map = function(k, X) {
   
   #Rows of X are variants. Row name is structure geneid_keysplit_rsid (e.g., OR4F5_keysplit_rs200676709)
   #We split around the token '_keysplit_' to retrieve geneid and rsid. 
-  
   geneid_rsid<-rownames(X)
-  geneid_rsid<-sapply(geneid_rsid,strsplit,'_keysplit_')
+  geneid_rsid<-sapply(geneid_rsid,strsplit,'_')
   geneid_rsid<-unlist(geneid_rsid,use.name=F)
   geneid_rsid<-matrix(geneid_rsid,nrow(X),2,byrow=T)
   
   N<-nrow(X)
   
-  controls<-which(colnames(X)=="control")
-  cases<-which(colnames(X)=="patho")
+  patient_class<-colnames(X)
+  patient_class<-sapply(patient_class,strsplit,'\\.')
+  patient_class<-unlist(patient_class,use.name=F)
+  patient_class<-matrix(patient_class,ncol(X),2,byrow=T)
+  
+  controls<-which(patient_class[,2]=="Control")
+  cases<-which(patient_class[,2]=="Patho")
   
   for (gene in unique(geneid_rsid[,1])) {#length(gene2rs)){
+    
     gene.rs.i<-which(geneid_rsid[,1]==gene)
     tab<-array(0,c(2,3))
     colnames(tab)<-c(0,1,2)
@@ -169,15 +163,38 @@ prof.run<-system.time({
 
 results<-from.dfs(PVmr)
 #to.dfs(results,output='/user/yleborgn/bridge/out16000.results')
+#to.dfs(results,output='/user/yleborgn/bridge/snpsMat10000.results')
 
 pv<-sapply(results[[2]],function(x) x$pv)
 st<-sapply(results[[2]],function(x) x$st)
+genes<-sapply(results[[2]],function(x) x$gene.rs)
 
 pv<-p.adjust(pv)
 print(summary(st))
 st[which(is.na(st))]<-Inf
-isel<-sort(st,decreasing=FALSE,index=TRUE)$ix[1:(10)]
+isel<-sort(st,decreasing=FALSE,index=TRUE)$ix
+
+
+geneid_rsid<-rownames(X)
+geneid_rsid<-sapply(geneid_rsid,strsplit,'_')
+geneid_rsid<-unlist(geneid_rsid,use.name=F)
+geneid_rsid<-matrix(geneid_rsid,nrow(X),2,byrow=T)
+geneid<-unique(geneid_rsid[,1])
+
 #names.genes<-names(gene2rs)
-#chosen<-names.genes[isel]
+chosen<-results[[1]][isel]
 
+res<-cbind(chosen,st)
 
+res.rs<-NULL
+for (i in 1:100) {
+  submat.i<-which(geneid_rsid[,1]==chosen[i])
+  X.sub<-X[submat.i,]
+  rownames(X.sub)<-geneid_rsid[submat.i,2]
+  res.rs<-c(res.rs,list(X.sub))
+}
+
+names(res.rs)<-chosen[1:100]
+
+write.table(file="../../res.txt",res,res.rs)
+save(file="../../res.Rdata",res,res.rs)
