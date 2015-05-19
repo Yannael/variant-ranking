@@ -78,10 +78,10 @@ createSNPsHighlanderDB<-function() {
   load(file="web/mySampleGroups.Rdata")
   
   system.time(
-    SNPs_patho<-getSNPsInfosHighlander(mySampleGroups[[2]][[1]]) #Patho
+    SNPs_patho<-getSNPsInfosHighlander(mySampleGroups[[2]][[1]],chr="1") #Patho
   )
   system.time(
-    SNPs_control<-getSNPsInfosHighlander(mySampleGroups[[2]][[2]]) #Control
+    SNPs_control<-getSNPsInfosHighlander(mySampleGroups[[2]][[2]],chr="1") #Control
   )
   
   chr<-SNPs_patho[,"chr"]
@@ -102,8 +102,8 @@ createSNPsHighlanderDB<-function() {
   dbSNPs<-SNPs_patho[,c('Locus','gene_ensembl', 'num_genes','clinvar_rs','dbsnp_id_137',
                      'dbsnp_id_141','filters','cadd_phred','cadd_raw','vest_score')]
   
-  SNPs_patho<-SNPs_patho[,c("patient","Locus","read_depth","zygosity")]
-  SNPs_control<-SNPs_control[,c("patient","Locus","read_depth","zygosity")]
+  SNPs_patho<-SNPs_patho[,c("patient","chr","pos","Locus","read_depth","zygosity")]
+  SNPs_control<-SNPs_control[,c("patient","chr","pos","Locus","read_depth","zygosity")]
   
   system.time({
     con <- dbConnect(RSQLite::SQLite(), "groupsToComparePartial.db")
