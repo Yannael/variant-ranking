@@ -47,6 +47,8 @@ getMappingZH_ISDBM<-function() {
 
 }
 
+countNA<-function(x) {length(which(is.na(x)))}
+
 retrieveRefEntriesChr<-function(chr,patho,control) {
   
   #2s
@@ -72,13 +74,25 @@ retrieveRefEntriesChr<-function(chr,patho,control) {
   snpsMat[snpsMat<thresh]<-NA
   snpsMat[snpsMat>=thresh]<-0
   
-  select.entry.homozygous<-which((patho$Locus %in% coverage$Locus) & (patho$zygosity=="Homozygous"))
+  nb.NA<-apply(snpsMat,1,countNA)
+  i.remove<-which(nb.NA>0)
+  snpsMat<-snpsMat[-i.remove,]
+  
+  select.entry.homozygous<-which((patho$Locus %in% rownames(snpsMat)) & (patho$zygosity=="Homozygous"))
   for (i in select.entry.homozygous) 
     snpsMat[patho$Locus[i],patho$patient[i]]<-2
   
-  select.entry.heterozygous<-which((patho$Locus %in% coverage$Locus) & (patho$zygosity=="Heterozygous"))
+  select.entry.heterozygous<-which((patho$Locus %in% rownames(snpsMat)) & (patho$zygosity=="Heterozygous"))
   for (i in select.entry.heterozygous) 
     snpsMat[patho$Locus[i],patho$patient[i]]<-1
+  
+  select.entry.homozygous<-which((control$Locus %in% rownames(snpsMat)) & (control$zygosity=="Homozygous"))
+  for (i in select.entry.homozygous) 
+    snpsMat[control$Locus[i],control$patient[i]]<-2
+  
+  select.entry.heterozygous<-which((control$Locus %in% rownames(snpsMat)) & (control$zygosity=="Heterozygous"))
+  for (i in select.entry.heterozygous) 
+    snpsMat[control$Locus[i],control$patient[i]]<-1
   
   snpsMat
 }
@@ -86,16 +100,16 @@ retrieveRefEntriesChr<-function(chr,patho,control) {
 retrieveRefEntries<-function() {
   
   #Move patho and control groups to coverage DB
-  congroups <- dbConnect(RSQLite::SQLite(), "../groupsToComparePartial.db")
-  concoverage<- dbConnect(RSQLite::SQLite(), "../coverage.db")
+  congroups <- dbConnect(RSQLite::SQLite(), "../../groupsToComparePartial.db")
+  concoverage<- dbConnect(RSQLite::SQLite(), "../../coverage.db")
   
   rs<-dbSendQuery(congroups,"select * from patho" )
   patho<-fetch(rs, n=-1)
   rs<-dbSendQuery(congroups,"select * from control" )
   control<-fetch(rs, n=-1)
   
-  dbWriteTable(concoverage,"patho",patho,overwrite=T)
-  dbWriteTable(concoverage,"control",control,overwrite=T)
+  #dbWriteTable(concoverage,"patho",patho,overwrite=T)
+  #dbWriteTable(concoverage,"control",control,overwrite=T)
   
   #getMappingZH_ISDBM
   
@@ -105,7 +119,7 @@ retrieveRefEntries<-function() {
   
   snpsMat<-NULL
   
-  for (chr in 1:21) {
+  for (chr in 1:1) {
     print(chr)
     st<-system.time(snpsMat<-rbind(snpsMat,retrieveRefEntriesChr(paste0("chr",chr),patho,control)))
     print(st)
@@ -159,6 +173,11 @@ dummy<-function() {
   
   datamatch<-datamatch[sort(datamatch$pos,index.ret=T)$ix,]
   
+  #Also, in Highlander, 
+  #select patient chr, pos, num_genes, gene_ensembl, db_snp_id_137, filters
+  # for chr4, pos 54969778
+  #To see inconsistent info
   
+  #3) Why is there no missing value in coverage file (i.e., at one locus, there should be missing data for some samples) 
   
 }
