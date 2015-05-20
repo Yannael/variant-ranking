@@ -12,3 +12,5 @@ load("mySampleGroups.Rdata")
 load("myResults.Rdata")
 
 #disGenNet<-read.csv("all_gene_disease_associations.txt",sep="\t")
+
+load("../res.Rdata")

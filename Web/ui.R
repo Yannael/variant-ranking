@@ -1,5 +1,5 @@
 library(shiny)
-#library(DT)
+library(DT)
 
 shinyUI(fluidPage(
   includeCSS('www/style.css'),
@@ -42,7 +42,7 @@ shinyUI(fluidPage(
                         ),
                         column(9,
                                div(
-                                 dataTableOutput('phenotypesTable'),
+                                 DT::dataTableOutput('phenotypesTable'),
                                  tags$style(type="text/css", '.shiny-datatable-output tfoot {display:table-header-group;}')
                                  , style = 'width:690px;')
                         )
@@ -108,35 +108,13 @@ shinyUI(fluidPage(
                       fluidRow(
                         column(3,
                                selectInput('selectedResultGroup', 'Select result ID', choices = list(
-                                 "Available results" = resultsAll[[1]]
+                                 "Available results" = c(res$name)
                                ), selectize = FALSE)
                         )
                       ),
                       hr(),
-                      fluidRow(
-                        column(3,
-                               checkboxGroupInput('showVarResults', 'Display fields:',
-                                                  colnames(resultsAll[[2]][[1]]), selected = c(colnames(resultsAll[[2]][[1]]))),
-                               hr(),
-                               selectInput('result_selectedFilterGeneVariantSet', 'Filter gene/variant set',selected="All",
-                                           choices = list(
-                                             "Genes" = c('All'='allg','GeneList1' = 'l1', "GeneList2" = 'l2', "GeneList3"="l3"),
-                                             "Variants" = c('All'='allv','VariantList1' = 'v1', "VariantList2" = 'l2')
-                                           ), 
-                                           selectize = FALSE),
-                               hr(),
-                               textInput("result_filterNCBIterms", label = "NCBI gene filter", 
-                                         value = ""),
-                               actionButton("result_filterNCBI", label = "Filter")
-                        ),
-                        column(9,
-                               div(
-                                 dataTableOutput('resultsTable'),
-                                 tags$style(type="text/css", '.shiny-datatable-output tfoot {display:table-header-group;}')
-                                 , style = 'width:690px;')
-                        )
-                        
-                      )
+                      uiOutput("resultsPanel")
+                     
              )
            )
     ))

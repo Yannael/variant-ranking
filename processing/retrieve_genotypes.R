@@ -51,13 +51,13 @@ getSNPsInfosHighlander<-function(samples,chromosome=NULL,base_range=NULL) {
   sql<-paste0("
   select 
   patient,chr,pos,read_depth,
-  allelic_depth_ref,allelic_depth_alt,
-  zygosity,genotype_quality,
-  gene_ensembl, num_genes,clinvar_rs,
+  zygosity,reference, alternative, gene_symbol,
+  gene_ensembl, num_genes,clinvar_rs, 
   dbsnp_id_137,
-  dbsnp_id_141,filters,cadd_phred,cadd_raw,vest_score
+  cadd_phred,cadd_raw,vest_score,pph2_hdiv_score,sift_score
   from exomes_ug
-  where (patient='", samples_select,"') ",
+  where change_type='SNP' and 
+              (patient='", samples_select,"') ",
               chr_select,
               base_range_select
   )
@@ -99,8 +99,9 @@ createSNPsHighlanderDB<-function() {
   if (length(i)>0) SNPs_control<-SNPs_control[-i,]
   
   
-  dbSNPs<-SNPs_patho[,c('Locus','gene_ensembl', 'num_genes','clinvar_rs','dbsnp_id_137',
-                     'dbsnp_id_141','filters','cadd_phred','cadd_raw','vest_score')]
+  dbSNPs<-SNPs_patho[,c('Locus','chr', 'pos', 'dbsnp_id_137','gene_ensembl', 'gene_symbol',
+                        'reference','alternative','num_genes','clinvar_rs',
+                     'cadd_phred','cadd_raw','vest_score','pph2_hdiv_score','sift_score')]
   
   SNPs_patho<-SNPs_patho[,c("patient","chr","pos","Locus","read_depth","zygosity")]
   SNPs_control<-SNPs_control[,c("patient","chr","pos","Locus","read_depth","zygosity")]
