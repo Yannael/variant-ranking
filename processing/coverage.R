@@ -27,8 +27,8 @@ createCoverageDB<-function() {
 getMappingZH_ISDBM<-function() {
   
   #Change control or patho
-  sql<-"select * from patho, chr17
-  where patho.Locus=chr17.Locus"
+  sql<-"select * from control, chr17
+  where control.Locus=chr17.Locus"
   
   system.time({
     rs = dbSendQuery(concoverage,sql )
@@ -43,6 +43,7 @@ getMappingZH_ISDBM<-function() {
     name<-colnames(ss[1:15,c(1,which.max(cor(ss[,1],ss[,2:ncol(ss)]))+1)])[2]
     ISid<-c(ISid,strsplit(name,"_for_")[[1]][2])
   }
+
 
 }
 
@@ -85,16 +86,16 @@ retrieveRefEntriesChr<-function(chr,patho,control) {
 retrieveRefEntries<-function() {
   
   #Move patho and control groups to coverage DB
-  congroups <- dbConnect(RSQLite::SQLite(), "../../groupsToComparePartial.db")
-  concoverage<- dbConnect(RSQLite::SQLite(), "../../coverage.db")
+  congroups <- dbConnect(RSQLite::SQLite(), "../groupsToComparePartial.db")
+  concoverage<- dbConnect(RSQLite::SQLite(), "../coverage.db")
   
   rs<-dbSendQuery(congroups,"select * from patho" )
   patho<-fetch(rs, n=-1)
   rs<-dbSendQuery(congroups,"select * from control" )
   control<-fetch(rs, n=-1)
   
-  #dbWriteTable(concoverage,"patho",patho,overwrite=T)
-  #dbWriteTable(concoverage,"control",control,overwrite=T)
+  dbWriteTable(concoverage,"patho",patho,overwrite=T)
+  dbWriteTable(concoverage,"control",control,overwrite=T)
   
   #getMappingZH_ISDBM
   
@@ -131,5 +132,33 @@ retrieveRefEntries<-function() {
   
   save(file="../../snpsMat.Rdata",snpsMat)
   write.table(file="../../snpsMat.txt",snpsMat)
+  
+}
+
+dummy<-function() {
+  
+  #In highlander: Select patient, read_depth, patho, chr, pos columns
+  #Filter with patient ZH135614, chr1
+  #Sort by ascending order
+  #
+  #Note discrepancy in results. (e.g., locus 1:14653, or 1:17538)
+  
+  #Get chr1 info dor child in trio 1
+  rs<-dbSendQuery(concoverage,"select Locus, Average_Depth_sample, Depth_for_ISDBM387751 from chr1")
+  datacoverage<-fetch(rs, n=-1)
+  
+  rs<-dbSendQuery(concoverage,"select * from patho where patient='ZH135614' and chr=1")
+  datapatho<-fetch(rs, n=-1)
+  
+  rs<-dbSendQuery(concoverage,"select patho.Locus, chr, pos, read_depth, Depth_for_ISDBM387751 from patho,chr1 
+                  where patient='ZH135614' and chr=1 and patho.Locus=chr1.Locus")
+  datamatch<-fetch(rs, n=-1)
+  
+  datamatch[1:10,]
+  
+  
+  datamatch<-datamatch[sort(datamatch$pos,index.ret=T)$ix,]
+  
+  
   
 }
