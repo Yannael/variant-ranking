@@ -108,7 +108,7 @@ shinyUI(fluidPage(
                       fluidRow(
                         column(3,
                                selectInput('selectedResultGroup', 'Select result ID', choices = list(
-                                 "Available results" = c(res$name)
+                                 "Available results" = res$name
                                ), selectize = FALSE)
                         )
                       ),
