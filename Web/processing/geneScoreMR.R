@@ -288,6 +288,10 @@ save(file="../../res.Rdata",res)
 
 }
 
+getCountsTab<-function(M) {
+  apply(tabb,1,paste,collapse=";")
+}
+
 postProcessing<-function() {
   
   results<-from.dfs(PVmr)
@@ -309,15 +313,17 @@ postProcessing<-function() {
   
   snpMatch<-match(names.locus.mat[,2],dbSNPs$Locus)
   
+  countTabCols<-t(sapply(tab,getCountsTab))
+  
   matRes<-cbind(round(st,digits=2),
                 dbSNPs[snpMatch,c("Locus","dbsnp_id_137","gene_ensembl","gene_symbol","reference",
                             "alternative")],
-                
+                countTabCols,
                 dbSNPs[snpMatch,c("num_genes","cadd_phred","cadd_raw","vest_score",
                             "pph2_hdiv_score","sift_score")])
   
-  niceNames<-c("Ranking score","Chromosome","Position","dbSNP ID (137)","Gene Ensembl ID","Gene Symbol","Ref",
-               "Alt","#Genes","cadd_phred","cadd_raw","VEST score",
+  niceNames<-c("Ranking score","Locus","dbSNP ID (137)","Gene Ensembl ID","Gene Symbol","Ref",
+               "Alt","Alleles (Control)","Alleles (Pathological)","#Genes","cadd_phred","cadd_raw","VEST score",
                "Polyphen score","Sift score")
   
   colnames(matRes)<-niceNames
@@ -326,13 +332,13 @@ postProcessing<-function() {
   snpsMat<-snpsMat[match.snpsMat,]
   
   metadata<-list(timestart="2015-05-20 15:59:41 CEST",
-                 timeend="2015-05-20 27:47:38 CEST",
+                 timeend="2015-05-20 17:47:38 CEST",
                  controlgroup="Erasme_Control",
                  pathogroup="NEURODEV")
   
   name<-"NEURODEV_vs_ErasmeControl"
   
-  res<-list(matRes=matRes,snpsMat=snpsMat,metadata=metadata,tab=tab,name=name)
+  res<-list(matRes=matRes,snpsMat=snpsMat,metadata=metadata,tab=tab,name=list(name))
   
   save(file="../../res.Rdata",res)
 }
