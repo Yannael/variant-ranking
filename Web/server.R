@@ -106,7 +106,7 @@ shinyServer(function(input, output,session) {
     patient_class<-colnames(subMat)
     patient_class<-sapply(patient_class,strsplit,':')
     patient_class<-unlist(patient_class,use.name=F)
-    patient_class<-matrix(patient_class,ncol(snpsMatsub),2,byrow=T)
+    patient_class<-matrix(patient_class,ncol(subMat),2,byrow=T)
     
     controls<-which(patient_class[,2]=="Control")
     cases<-which(patient_class[,2]=="Patho")
@@ -136,6 +136,14 @@ shinyServer(function(input, output,session) {
       
     )
   })
+  
+  #observe({
+    #input$refreshHeatMaps
+    #cdata<-input$resultsTable_rows_current
+  #  browser()
+  #  print("hey"
+  #        )
+  #})
   
   output$resultsPanel<-renderUI({
     fluidRow(

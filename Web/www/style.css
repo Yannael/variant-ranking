@@ -113,4 +113,9 @@ h1 {
   font-weight: bold;
 }
 
+ul.ColVis_collection {
+  width:250px;
+  margin-left:-110px;
+  background-color:#FFFFFF;
+}
 
