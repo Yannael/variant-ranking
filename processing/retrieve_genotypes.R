@@ -54,9 +54,21 @@ getSNPsInfosHighlander<-function(samples,chromosome=NULL,base_range=NULL) {
   zygosity,reference, alternative, gene_symbol,
   gene_ensembl, num_genes,clinvar_rs, 
   dbsnp_id_137,
-  cadd_phred,cadd_raw,vest_score,pph2_hdiv_score,sift_score
+  allelic_depth_ref,
+  allelic_depth_alt,
+  snpeff_effect, snpeff_impact,
+  consensus_maf,
+  cadd_phred,cadd_raw,vest_score,pph2_hdiv_score, pph2_hdiv_pred, 
+  pph2_hvar_score, pph2_hvar_pred, sift_score, sift_pred, short_tandem_repeat
   from exomes_ug
   where change_type='SNP' and 
+        filters='PASS' and
+        read_depth>15 and
+        mapping_quality_zero_reads=0 and
+        downsampled='false' and
+        allele_num=2 and
+        genotype_quality>70 and
+        
               (patient='", samples_select,"') ",
               chr_select,
               base_range_select
@@ -101,10 +113,16 @@ createSNPsHighlanderDB<-function() {
   
   dbSNPs<-SNPs_patho[,c('Locus','chr', 'pos', 'dbsnp_id_137','gene_ensembl', 'gene_symbol',
                         'reference','alternative','num_genes','clinvar_rs',
-                     'cadd_phred','cadd_raw','vest_score','pph2_hdiv_score','sift_score')]
+                        'snpeff_effect', 'snpeff_impact',
+                        'consensus_maf',
+                        'cadd_phred','cadd_raw','vest_score','pph2_hdiv_score','pph2_hdiv_pred', 
+                        'pph2_hvar_score', 'pph2_hvar_pred', 'sift_score', 'sift_pred', 'short_tandem_repeat'
+                     )]
   
-  SNPs_patho<-SNPs_patho[,c("patient","chr","pos","Locus","read_depth","zygosity")]
-  SNPs_control<-SNPs_control[,c("patient","chr","pos","Locus","read_depth","zygosity")]
+  SNPs_patho<-SNPs_patho[,c("patient","chr","pos","Locus","read_depth","zygosity",'allelic_depth_ref',
+                            'allelic_depth_alt')]
+  SNPs_control<-SNPs_control[,c("patient","chr","pos","Locus","read_depth","zygosity",'allelic_depth_ref',
+                                'allelic_depth_alt')]
   
   system.time({
     con <- dbConnect(RSQLite::SQLite(), "groupsToComparePartial.db")
