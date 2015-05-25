@@ -104,12 +104,12 @@ shinyServer(function(input, output,session) {
     rownames(subMat)<-sessionvalues$currentResults$matRes$Locus[1:10]
     
     patient_class<-colnames(subMat)
-    patient_class<-sapply(patient_class,strsplit,':')
+    patient_class<-sapply(patient_class,strsplit,'_')
     patient_class<-unlist(patient_class,use.name=F)
-    patient_class<-matrix(patient_class,ncol(subMat),2,byrow=T)
+    patient_class<-matrix(patient_class,ncol(subMat),3,byrow=T)
     
-    controls<-which(patient_class[,2]=="Control")
-    cases<-which(patient_class[,2]=="Patho")
+    controls<-which(patient_class[,2]!="C")
+    cases<-which(patient_class[,2]=="C")
     
     i.order<-sort(patient_class[,2],index=T)$ix
     subMat<-subMat[,i.order]
