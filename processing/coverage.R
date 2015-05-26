@@ -3,13 +3,13 @@ library(RMySQL)
 createCoverageDB<-function() {
   
   
-  con <- dbConnect(RSQLite::SQLite(), "../../coverage.db")
+  con <- dbConnect(RSQLite::SQLite(), "../../coverage2.db")
   
   #Add X
-  for (num in 1:22) {
+  for (num in 1:1) {
     if (num<10) add0<-"0" else add0<-""
     
-    filename<-paste0("/home/yleborgn/bridge/data/erasme/coverage/ISDBMbatch_coverage_chr",add0,num,"_trios")
+    filename<-paste0("/home/yleborgn/bridge/data/erasme/coverage2/ISDBMbatch_coverage_chr",add0,num,"_trios")
     
     #Takes about 2 minutes
     system.time(CoverageTab<-read.table(filename,header=T))
@@ -52,19 +52,20 @@ countNA<-function(x) {length(which(is.na(x)))}
 retrieveRefEntriesChr<-function(chr,patho,control) {
   
   #2s
-  system.time({
-    rs<-dbSendQuery(concoverage,paste("select Average_Depth_sample from ",chr))
-    avg_depth = fetch(rs, n=-1)
-  })
-  thresh<-median(avg_depth[,1])
+  #system.time({
+  #  rs<-dbSendQuery(concoverage,paste("select Average_Depth_sample from ",chr))
+  #  avg_depth = fetch(rs, n=-1)
+  #})
+  #thresh<-median(avg_depth[,1])
+  thresh<-15
   
-  #30s
+  #10min
   system.time({
     rs<-dbSendQuery(concoverage,paste0("select * from locus_snps,",chr," where locus_snps.Locus=",chr,".Locus"))
     coverage<-fetch(rs, n=-1)
   })
   
-  snpsMat<-coverage[,5:37]
+  snpsMat<-coverage[,6:38]
   ISDBMid<-as.vector(unlist(sapply(colnames(snpsMat),substr,11,21)))
   mapping<-read.table('mappingZH_ISDBM.txt',stringsAsFactors=F)
   i<-match(ISDBMid,mapping[,2])
@@ -135,14 +136,11 @@ retrieveRefEntries<-function() {
   snpsMat<-snpsMat[sort(rownames(snpsMat),index.return=T)$ix,]
   
   patient_patho<-unique(patho$patient)
-  match.patient<-match(patient_patho,colnames(snpsMat))
-  patient_patho<-paste(patient_patho,"Patho",sep=":")
-  colnames(snpsMat)[match.patient]<-patient_patho
   
-  patient_control<-unique(control$patient)
-  match.patient<-match(patient_control,colnames(snpsMat))
-  patient_control<-paste(patient_control,"Control",sep=":")
-  colnames(snpsMat)[match.patient]<-patient_control
+  patient_data<-read.table("mappingZH_ISDBM_withFMC.txt")
+  
+  match.patient<-match(patient_data[,1],colnames(snpsMat))
+  colnames(snpsMat)[match.patient]<-paste(patient_data[,1],patient_data[,3],sep="_")
   
   save(file="../../snpsMat.Rdata",snpsMat)
   write.table(file="../../snpsMat.txt",snpsMat)
