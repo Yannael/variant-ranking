@@ -3,15 +3,15 @@ library(RMySQL)
 createCoverageDB<-function() {
   
   
-  con <- dbConnect(RSQLite::SQLite(), "../../coverage2.db")
+  con <- dbConnect(RSQLite::SQLite(), "../../coverage.db")
   
   #Add X
   for (num in 1:1) {
     if (num<10) add0<-"0" else add0<-""
     
-    filename<-paste0("/home/yleborgn/bridge/data/erasme/coverage2/ISDBMbatch_coverage_chr",add0,num,"_trios")
+    filename<-paste0("/home/yleborgn/bridge/data/erasme/coverage/ISDBMbatch_coverage_chr",add0,num,"_trios_seqCap")
     
-    #Takes about 2 minutes
+    #Takes about 5 minutes
     system.time(CoverageTab<-read.table(filename,header=T))
     
     #30s
@@ -24,39 +24,11 @@ createCoverageDB<-function() {
   
 }
 
-getMappingZH_ISDBM<-function() {
-  
-  #Change control or patho
-  sql<-"select * from control, chr17
-  where control.Locus=chr17.Locus"
-  
-  system.time({
-    rs = dbSendQuery(concoverage,sql )
-    controlSNPs = fetch(rs, n=-1)
-  })
-  
-  ids<-unique(controlSNPs[,1])
-  
-  ISid<-NULL
-  for (i in 1:length(ids)) {
-    ss<-controlSNPs[which(controlSNPs[,1]==ids[i]),c(4,22:54)]
-    name<-colnames(ss[1:15,c(1,which.max(cor(ss[,1],ss[,2:ncol(ss)]))+1)])[2]
-    ISid<-c(ISid,strsplit(name,"_for_")[[1]][2])
-  }
-
-
-}
 
 countNA<-function(x) {length(which(is.na(x)))}
 
 retrieveRefEntriesChr<-function(chr,patho,control) {
   
-  #2s
-  #system.time({
-  #  rs<-dbSendQuery(concoverage,paste("select Average_Depth_sample from ",chr))
-  #  avg_depth = fetch(rs, n=-1)
-  #})
-  #thresh<-median(avg_depth[,1])
   thresh<-15
   
   #10min
@@ -112,8 +84,6 @@ retrieveRefEntries<-function() {
   #dbWriteTable(concoverage,"patho",patho,overwrite=T)
   #dbWriteTable(concoverage,"control",control,overwrite=T)
   
-  #getMappingZH_ISDBM
-  
   locusSNPs<-data.frame(unique(patho$Locus),stringsAsFactors=F)
   colnames(locusSNPs)<-"Locus"
   dbWriteTable(concoverage,"locus_snps",locusSNPs,overwrite=T)
@@ -154,6 +124,8 @@ dummy<-function() {
   #Sort by ascending order
   #
   #Note discrepancy in results. (e.g., locus 1:14653, or 1:17538)
+  dbWriteTable(concoverage,"patho",patho)
+  
   
   #Get chr1 info dor child in trio 1
   rs<-dbSendQuery(concoverage,"select Locus, Average_Depth_sample, Depth_for_ISDBM387751 from chr1")
@@ -166,10 +138,13 @@ dummy<-function() {
                   where patient='ZH135614' and chr=1 and patho.Locus=chr1.Locus")
   datamatch<-fetch(rs, n=-1)
   
-  datamatch[1:10,]
-  
   
   datamatch<-datamatch[sort(datamatch$pos,index.ret=T)$ix,]
+  datamatch[1:10,]
+  
+  i.diff<-which(abs(datamatch[,4]-datamatch[,5])>10)
+  length(i.diff)
+  datamatch[i.diff[1:5],]
   
   #Also, in Highlander, 
   #select patient chr, pos, num_genes, gene_ensembl, db_snp_id_137, filters
