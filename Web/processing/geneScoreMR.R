@@ -5,7 +5,7 @@ library('rhdfs')
 library('rmr2')
 hdfs.init()
 
-infile<-"in.variantMat.csv"
+infile<-"in.variantMat.csv2"
 outfile<-paste0(gsub(" ","_",Sys.time()),"_out.variantMat.csv")
 
 local<-TRUE
@@ -26,34 +26,7 @@ if (local){
   hdfsoutfile<-paste0("/user/yleborgn/bridge/",outfile)
 }
 
-entropy.tab<-function(tab){
-  if (sum(tab)==0)
-    return(10)
-  S<-apply(tab,2,sum)
-  S[which(S==0)]<-1
-  px<-S/sum(S)
-  px[which(is.na(px))]<-0
-  p<-NULL
-  H<-NULL
-  
-  w<-which(px>0)
-  
-  for (i in w){
-    if (any(tab[,i]>0)){
-      pp<-tab[,i]/sum(tab[,i])
-      lp<-log2(pp)
-      ##E<-as(entropy.shrink(tab[,i],lambda.freqs=0.1,verbose=FALSE),"numeric")
-      wp<-which(pp>0)
-      E<--sum(pp[wp]*lp[wp])
-      ##E<-sum(pp)
-      H<-c(H,E)
-    }else{
-      H<-c(H,NA)
-    }
-  }
-  ent<-sum(px[w]*H,na.rm=TRUE)
-  
-}
+
 
 createData<-F
 if (createData) {
@@ -65,6 +38,7 @@ if (createData) {
     
     #snpsMat<-snpsMat[1:10000,]
     
+    snpsMat<-cbind(id=1:nrow(snpsMat), snpsMat)
     prof.savehdfs<-system.time(to.dfs(snpsMat,output=hdfsfile))
     
   })
@@ -152,7 +126,17 @@ map = function(k, X) {
   keyval(val,listX)
 }
 
-map.rs = function(k, X) {       
+countGeno<-function(x) {
+  
+  nb0<-sum(as.numeric(x==0))
+  nb1<-sum(as.numeric(x==1))
+  nb2<-sum(as.numeric(x==2))
+  nbNA<-sum(as.numeric(is.na(x)))
+  c(nb0,nb1,nb2,nbNA)
+  
+}
+
+map.denovo = function(k, X) {       
   listX<-NULL
   val<-NULL
   
@@ -160,29 +144,9 @@ map.rs = function(k, X) {
   
   loci<-rownames(X)
   
-  patient_class<-colnames(X)
-  patient_class<-sapply(patient_class,strsplit,'\\.')
-  patient_class<-unlist(patient_class,use.name=F)
-  patient_class<-matrix(patient_class,ncol(X),2,byrow=T)
-  
-  controls<-which(patient_class[,2]=="Control")
-  cases<-which(patient_class[,2]=="Patho")
-  
-  for (locus in 1:nrow(X)) {#length(gene2rs)){
+  for (locus in 1:nrow(X)) {
     
-    tab<-array(0,c(2,3))
-    colnames(tab)<-c(0,1,2)
-    rownames(tab)<-c("ctrl","case")
-    
-    cnt<-NULL 
-    
-    for (n in 1:ncol(tab)){
-      
-      tab["ctrl",n]<-length(which(X[locus,controls]==(n-1)))          
-      tab["case",n]<-length(which(X[locus,cases]==(n-1)))
-    }
-    
-    listX<-c(listX,list(list(tab=tab)))
+    listX<-c(listX,list(list(snpsMat=X[locus,])))
     val<-c(val,rownames(X[locus,]))
     
   }
@@ -190,34 +154,98 @@ map.rs = function(k, X) {
   keyval(val,listX)
 }
 
-reduce.rs =   function(k, v) { 
-  tab<-v[[1]]$tab
-  #cnt<-v[[1]]$cnt
-  #gene.rs<-v[[1]]$gene.rs
-  if (length(v)>1){
-    for (i in 2:length(v)){
-      tab<-tab+v[[i]]$tab
-      #cnt<-cbind(cnt,v[[i]]$cnt)
-      #gene.rs<-c(gene.rs,v[[i]]$gene.rs)
+reduce.denovo =   function(k, v) { 
+  
+  v<-v[[1]]$snpsMat
+  patient_data<-colnames(v)
+  patient_data<-sapply(patient_data,strsplit,'_')
+  patient_data<-unlist(patient_data,use.name=F)
+  patient_data<-matrix(patient_data,ncol(v),3,byrow=T)
+  
+  controls<-which(patient_data[,2]!="C")
+  cases<-which(patient_data[,2]=="C")
+  
+  tab<-array(0,c(2,4))
+  tab[1,]<-countGeno(v[,controls])
+  tab[2,]<-countGeno(v[,cases])
+  
+  rownames(tab)<-c("ctrl","case")
+  colnames(tab)<-c(0,1,2,"NA")
+  
+  score<-0
+  for (i in 1:11) {
+    genoC<-v[,which(patient_data[,2]=="C" & patient_data[,3]==i)]
+    genoF<-v[,which(patient_data[,2]=="F" & patient_data[,3]==i)]
+    genoM<-v[,which(patient_data[,2]=="M" & patient_data[,3]==i)]
+    
+    score<-score+as.numeric(genoC==1 & genoM==0 & genoF==0)
+  }
+  
+  keyval(k,list(list(tab=tab,score=score)))
+}
+
+lpart<-1000
+NAllpart<-6
+
+map.pairs = function(k, X) {       
+  val<-NULL
+  
+  N<-nrow(X)
+  #browser()
+  #In how many partitions must be split rows of X
+  npart<-ceiling(N/lpart)+1
+  #What is the starting partition in X index
+  startPart<-floor(X[1,1]/lpart)
+  
+  listX<-NULL
+  
+  for (i in (startPart:(startPart+npart-1))) {
+    indexpart<-which((X[,1]>=(i*lpart+1)) & (X[,1]<=((i+1)*lpart)))
+    if (length(indexpart)>0) {
+    listX<-c(listX,rep(list(list(snpsMat=X[indexpart,])),NAllpart))
+    namePart<-NULL
+    if (i>0) {
+      namePart<-paste(0:(i-1),"_",i,sep="")
+    }
+    namePart<-c(namePart,paste(i,"_",i:(NAllpart-1),sep=""))
+    val<-c(val,namePart)
     }
   }
+  #browser()
   
-  pv<-1
-  st<-10
+  keyval(val,listX)
+}
+
+reduce.pairs =   function(k, v) { 
   
-  #if (sum(tab["case",])>(length(cases)/2) & sum(tab["ctrl",])>0){    
-  #  ttest<- prop.trend.test(tab["case",], margin.table(tab,2))
-  #  pv<-ttest$p.value ##pvalue(IT) ##c(L.case,L.control))
-  #}
-  pv<-0
+  browser()
   
-  st<-entropy.tab(tab) #CHANGE was info.tab
-  delta<--10
-  if (all(apply(tab,1,sum)>0)){
-    tab2<-tab/apply(tab,1,sum)
-    delta<-sum(tab2["case",2:3]-tab2["ctrl",2:3])
-  }
-  keyval(k,list(list(tab=tab,pv=pv,st=st,delta=delta)))
+#   v<-v[[1]]$snpsMat
+#   patient_data<-colnames(v)
+#   patient_data<-sapply(patient_data,strsplit,'_')
+#   patient_data<-unlist(patient_data,use.name=F)
+#   patient_data<-matrix(patient_data,ncol(v),3,byrow=T)
+#   
+#   controls<-which(patient_data[,2]!="C")
+#   cases<-which(patient_data[,2]=="C")
+#   
+#   tab<-array(0,c(2,4))
+#   tab[1,]<-countGeno(v[,controls])
+#   tab[2,]<-countGeno(v[,cases])
+#   
+#   rownames(tab)<-c("ctrl","case")
+#   colnames(tab)<-c(0,1,2,"NA")
+#   
+#   score<-0
+#   for (i in 1:11) {
+#     genoC<-v[,which(patient_data[,2]=="C" & patient_data[,3]==i)]
+#     genoF<-v[,which(patient_data[,2]=="F" & patient_data[,3]==i)]
+#     genoM<-v[,which(patient_data[,2]=="M" & patient_data[,3]==i)]
+#     
+#     score<-score+as.numeric(genoC==1 & genoM==0 & genoF==0)
+#   }
+  
+  keyval(k,list(list(k)))
 }
 
 
@@ -227,83 +255,84 @@ dummy<-function() {
     PVmr = mapreduce(
       input=hdfsfile,  
       # input.format=dat.in.format,
-      map = map.rs,
-      reduce=reduce.rs
+      map = map.pairs,
+      reduce=reduce.pairs
     )
   })
   
   
-results<-from.dfs(PVmr)
-#to.dfs(results,output='/user/yleborgn/bridge/out16000.results')
-#to.dfs(results,output='/user/yleborgn/bridge/snpsMat10000.results')
-
-pv<-sapply(results[[2]],function(x) x$pv)
-st<-sapply(results[[2]],function(x) x$st)
-#genes<-sapply(results[[2]],function(x) x$gene.rs)
-
-#pv<-p.adjust(pv)
-print(summary(st))
-#st[which(is.na(st))]<-Inf
-
-rr<-apply(snpsMat,1,countNA)
-to.remove<-which(rr>0)
-
-st<-st[-to.remove]
-snpsMat2<-snpsMat[-to.remove,]
-names.locus<-results[[1]]
-names.locus<-names.locus[-to.remove]
-
-isel<-sort(st,decreasing=FALSE,index=TRUE)$ix
-
-score<-cbind(names.locus[isel[1:100]],st[isel[1:100]])
-match.snpsMat<-match(score[,1],rownames(snpsMat))
-snpsMatsub<-snpsMat[match.snpsMat,]
-save(file="../../res.Rdata",score,snpsMatsub)
-
-
-
-geneid_rsid<-results[[1]]
-geneid_rsid<-sapply(geneid_rsid,strsplit,'_')
-geneid_rsid<-unlist(geneid_rsid,use.name=F)
-geneid_rsid<-matrix(geneid_rsid,nrow(X),2,byrow=T)
-geneid<-unique(geneid_rsid[,1])
-
-#names.genes<-names(gene2rs)
-
-
-res<-cbind(chosen,st)
-
-res.rs<-NULL
-for (i in 1:100) {
-  submat.i<-which(geneid_rsid[,1]==chosen[i])
-  X.sub<-X[submat.i,]
-  rownames(X.sub)<-geneid_rsid[submat.i,2]
-  res.rs<-c(res.rs,list(X.sub))
-}
-
-names(res.rs)<-chosen[1:100]
-
-write.table(file="../../res.txt",res,res.rs)
-save(file="../../res.Rdata",res)
-
+  results<-from.dfs(PVmr)
+  #to.dfs(results,output='/user/yleborgn/bridge/out16000.results')
+  #to.dfs(results,output='/user/yleborgn/bridge/snpsMat10000.results')
+  
+  pv<-sapply(results[[2]],function(x) x$pv)
+  st<-sapply(results[[2]],function(x) x$st)
+  #genes<-sapply(results[[2]],function(x) x$gene.rs)
+  
+  #pv<-p.adjust(pv)
+  print(summary(st))
+  #st[which(is.na(st))]<-Inf
+  
+  rr<-apply(snpsMat,1,countNA)
+  to.remove<-which(rr>0)
+  
+  st<-st[-to.remove]
+  snpsMat2<-snpsMat[-to.remove,]
+  names.locus<-results[[1]]
+  names.locus<-names.locus[-to.remove]
+  
+  isel<-sort(st,decreasing=FALSE,index=TRUE)$ix
+  
+  score<-cbind(names.locus[isel[1:100]],st[isel[1:100]])
+  match.snpsMat<-match(score[,1],rownames(snpsMat))
+  snpsMatsub<-snpsMat[match.snpsMat,]
+  save(file="../../res.Rdata",score,snpsMatsub)
+  
+  
+  
+  geneid_rsid<-results[[1]]
+  geneid_rsid<-sapply(geneid_rsid,strsplit,'_')
+  geneid_rsid<-unlist(geneid_rsid,use.name=F)
+  geneid_rsid<-matrix(geneid_rsid,nrow(X),2,byrow=T)
+  geneid<-unique(geneid_rsid[,1])
+  
+  #names.genes<-names(gene2rs)
+  
+  
+  res<-cbind(chosen,st)
+  
+  res.rs<-NULL
+  for (i in 1:100) {
+    submat.i<-which(geneid_rsid[,1]==chosen[i])
+    X.sub<-X[submat.i,]
+    rownames(X.sub)<-geneid_rsid[submat.i,2]
+    res.rs<-c(res.rs,list(X.sub))
+  }
+  
+  names(res.rs)<-chosen[1:100]
+  
+  write.table(file="../../res.txt",res,res.rs)
+  save(file="../../res.Rdata",res)
+  
 }
 
 getCountsTab<-function(M) {
-  apply(tabb,1,paste,collapse=";")
+  apply(M,1,paste,collapse=";")
 }
 
 postProcessing<-function() {
   
   results<-from.dfs(PVmr)
   
-  st<-sapply(results[[2]],function(x) x$st)
+  score<-sapply(results[[2]],function(x) x$score)
   tab<-lapply(results[[2]],function(x) x$tab)
   names.locus<-results[[1]]
   
-  isel<-sort(st,decreasing=FALSE,index=TRUE)$ix
+  isel<-sort(score,decreasing=TRUE,index=TRUE)$ix
   
   names.locus<-names.locus[isel]
-  st<-st[isel]
+  score<-score[isel]
+  tab<-tab[isel]
   
   congroups <- dbConnect(RSQLite::SQLite(), "../../groupsToComparePartial.db")
   rs<-dbSendQuery(congroups,"select * from dbSNPs" )
@@ -315,16 +344,20 @@ postProcessing<-function() {
   
   countTabCols<-t(sapply(tab,getCountsTab))
   
-  matRes<-cbind(round(st,digits=2),
+  matRes<-cbind(score,
                 dbSNPs[snpMatch,c("Locus","dbsnp_id_137","gene_ensembl","gene_symbol","reference",
-                            "alternative")],
+                                  "alternative")],
                 countTabCols,
-                dbSNPs[snpMatch,c("num_genes","cadd_phred","cadd_raw","vest_score",
-                            "pph2_hdiv_score","sift_score")])
+                dbSNPs[snpMatch,c("num_genes",'snpeff_effect', 'snpeff_impact',
+                                  "cadd_phred","cadd_raw","vest_score",
+                                  "pph2_hdiv_score","pph2_hdiv_pred","pph2_hvar_score","pph2_hvar_pred",
+                                  "sift_score","sift_pred")])
   
   niceNames<-c("Ranking score","Locus","dbSNP ID (137)","Gene Ensembl ID","Gene Symbol","Ref",
-               "Alt","Alleles (Control)","Alleles (Pathological)","#Genes","cadd_phred","cadd_raw","VEST score",
-               "Polyphen score","Sift score")
+               "Alt","Alleles (Control)","Alleles (Pathological)","#Genes",'snpeff_effect', 'snpeff_impact',
+               "cadd_phred","cadd_raw","VEST score",
+               "pph2_hdiv_score","pph2_hdiv_pred","pph2_hvar_score","pph2_hvar_pred",
+               "sift_score","sift_pred")
   
   colnames(matRes)<-niceNames
   
