@@ -8,7 +8,7 @@ hdfs.init()
 infile<-"in.variantMat.csv2"
 outfile<-paste0(gsub(" ","_",Sys.time()),"_out.variantMat.csv")
 
-local<-TRUE
+local<-FALSE
 if (local){
   rmr.options(backend = "local")
   hdfsfile<-paste0("/home/yleborgn/bridge/",infile)
@@ -28,7 +28,7 @@ if (local){
 
 
 
-createData<-F
+createData<-T
 if (createData) {
   prof.init<-system.time({
     load("../../snpsMat.Rdata")
@@ -139,7 +139,6 @@ countGeno<-function(x) {
 map.denovo = function(k, X) {       
   listX<-NULL
   val<-NULL
-  
   N<-nrow(X)
   
   loci<-rownames(X)
@@ -155,8 +154,8 @@ map.denovo = function(k, X) {
 }
 
 reduce.denovo =   function(k, v) { 
-  
-  v<-v[[1]]$snpsMat
+  #browser()
+  v<-v[[1]]$snpsMat[,2:34]
   patient_data<-colnames(v)
   patient_data<-sapply(patient_data,strsplit,'_')
   patient_data<-unlist(patient_data,use.name=F)
@@ -251,6 +250,18 @@ reduce.pairs =   function(k, v) {
 
 
 dummy<-function() {
+  
+  prof.run<-system.time({
+    PVmr = mapreduce(
+      input=hdfsfile,  
+      # input.format=dat.in.format,
+      map = map.denovo,
+      reduce=reduce.denovo
+    )
+  })
+  
+  
+  
   prof.run<-system.time({
     PVmr = mapreduce(
       input=hdfsfile,  
