@@ -37,7 +37,7 @@ retrieveRefEntriesChr<-function(chr,patho,control) {
     coverage<-fetch(rs, n=-1)
   })
   
-  snpsMat<-coverage[,6:38]
+  snpsMat<-coverage[,5:37]
   ISDBMid<-as.vector(unlist(sapply(colnames(snpsMat),substr,11,21)))
   mapping<-read.table('mappingZH_ISDBM.txt',stringsAsFactors=F)
   i<-match(ISDBMid,mapping[,2])
