@@ -26,8 +26,6 @@ if (local){
   hdfsoutfile<-paste0("/user/yleborgn/bridge/",outfile)
 }
 
-
-
 createData<-T
 if (createData) {
   prof.init<-system.time({
