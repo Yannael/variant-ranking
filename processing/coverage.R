@@ -3,7 +3,7 @@ library(RMySQL)
 createCoverageDB<-function() {
   
   
-  con <- dbConnect(RSQLite::SQLite(), "../../coverage.db")
+  con <- dbConnect(RSQLite::SQLite(), "coverage.db")
   
   #Add X
   for (num in 1:1) {
@@ -73,8 +73,8 @@ retrieveRefEntriesChr<-function(chr,patho,control) {
 retrieveRefEntries<-function() {
   
   #Move patho and control groups to coverage DB
-  congroups <- dbConnect(RSQLite::SQLite(), "../../groupsToComparePartial.db")
-  concoverage<- dbConnect(RSQLite::SQLite(), "../../coverage.db")
+  congroups <- dbConnect(RSQLite::SQLite(), "groupsToComparePartial.db")
+  concoverage<- dbConnect(RSQLite::SQLite(), "coverage.db")
   
   rs<-dbSendQuery(congroups,"select * from patho" )
   patho<-fetch(rs, n=-1)
