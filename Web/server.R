@@ -7,7 +7,7 @@ shinyServer(function(input, output,session) {
   sessionvalues <- reactiveValues()
   sessionvalues$phenotypes<-phenotypesAll
   
-  sessionvalues$currentResults<-res
+  sessionvalues$currentResults<-results
   
   getSampleIDFromGroup<-function(groupName) {
     index.group<-which(mySampleGroups[[1]]==paste0(groupName))
@@ -41,34 +41,8 @@ shinyServer(function(input, output,session) {
   }
   )
   
-  output$resultsTable2<-DT::renderDataTable({
-    
-    data<-as.data.frame(sessionvalues$currentResults$matRes)
-    action = dataTableAjax(session, data)
-    datatable(data, 
-              #rownames = checkboxRows(data),
-              extensions = c('ColVis','Scroller'),
-              escape=F,
-              filter = 'top',
-              options = list(
-                #sscrollX = TRUE,
-                #colVis=list(exclude=c(0)),
-                dom= 'CrtiS',
-                ajax = list(url = action),
-                deferRender = TRUE,
-                scrollY = 500,
-                scrollCollapse = T,
-                lengthMenu = list(c(10, 25, -1), c('10', '25','All')),pageLength = 10,
-                autoWidth = T,
-                columnDefs = list(list(className="dt-right",targets="_all"),
-                                  list(visible=F,targets=c(4,6:7,9:14)) 
-                )
-              )
-    )
-  })
-  
-  output$resultsTable<-DT::renderDataTable({
-    data<-sessionvalues$currentResults$matRes
+   output$resultsTable<-DT::renderDataTable({
+    data<-sessionvalues$currentResults$genotypes
     if (!is.null(dim(data))) {
       action = dataTableAjax(session, data)
       
@@ -88,8 +62,8 @@ shinyServer(function(input, output,session) {
                            colVis=list(exclude=c(0)),
                            autoWidth = F,
                            columnDefs = list(list(className="dt-right",targets="_all"), 
-                                             list(width='100px',targets="_all"),
-                                             list(visible=F,targets=c(0,4,6:7,10:15)) 
+                                             list(width='100px',targets="_all")#,
+                                             #list(visible=F,targets=c(0,4,6:7,10:15)) 
                                              
                            )
                          )
@@ -127,7 +101,7 @@ shinyServer(function(input, output,session) {
              strong("End time: ")
       ),
       column(4,
-             sessionvalues$currentResults$name[[1]][1],br(),
+             sessionvalues$currentResults$name,br(),
              sessionvalues$currentResults$metadata$controlgroup,br(),
              sessionvalues$currentResults$metadata$pathogroup,br(),
              sessionvalues$currentResults$metadata$timestart,br(),
