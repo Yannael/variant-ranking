@@ -44,7 +44,7 @@ getSNPsInfosHighlander<-function(samples,chromosome=NULL,base_range=NULL) {
   else base_range_select<-paste0("and pos>=",base_range[1]," and pos<=",base_range[2])
   
   require(RMySQL)
-  source("../../connectHighlander.R")
+  source("../connectHighlander.R")
   
   samples_select<-paste(samples,collapse="' OR patient='")
   
@@ -61,7 +61,7 @@ getSNPsInfosHighlander<-function(samples,chromosome=NULL,base_range=NULL) {
   cadd_phred,cadd_raw,vest_score,pph2_hdiv_score, pph2_hdiv_pred, 
   pph2_hvar_score, pph2_hvar_pred, sift_score, sift_pred, short_tandem_repeat
   from exomes_ug
-  where change_type='SNP' and 
+  where 
         filters='PASS' and
         read_depth>15 and
         mapping_quality_zero_reads=0 and
@@ -73,7 +73,7 @@ getSNPsInfosHighlander<-function(samples,chromosome=NULL,base_range=NULL) {
               chr_select,
               base_range_select
   )
-  
+  #change_type='SNP' and 
   rs = dbSendQuery(highlanderdb,sql )
   data = fetch(rs, n=-1)
   
@@ -87,7 +87,7 @@ getSNPsInfosHighlander<-function(samples,chromosome=NULL,base_range=NULL) {
 createSNPsHighlanderDB<-function() {
   #Load all data from Erasme trios. 
   
-  load(file="web/mySampleGroups.Rdata")
+  load(file="Web/mySampleGroups.Rdata")
   
   system.time(
     SNPs_patho<-getSNPsInfosHighlander(mySampleGroups[[2]][[1]],chr="1") #Patho
@@ -119,10 +119,8 @@ createSNPsHighlanderDB<-function() {
                         'pph2_hvar_score', 'pph2_hvar_pred', 'sift_score', 'sift_pred', 'short_tandem_repeat'
                      )]
   
-  SNPs_patho<-SNPs_patho[,c("patient","chr","pos","Locus","read_depth","zygosity",'allelic_depth_ref',
-                            'allelic_depth_alt')]
-  SNPs_control<-SNPs_control[,c("patient","chr","pos","Locus","read_depth","zygosity",'allelic_depth_ref',
-                                'allelic_depth_alt')]
+  SNPs_patho<-SNPs_patho[,c("patient","chr","pos","Locus","read_depth","zygosity",'alternative')]
+  SNPs_control<-SNPs_control[,c("patient","chr","pos","Locus","read_depth","zygosity",'alternative')]
   
   system.time({
     con <- dbConnect(RSQLite::SQLite(), "groupsToComparePartial.db")
