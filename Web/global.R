@@ -24,9 +24,14 @@ procRes<-function(results) {
     res$type<-"singleVariant"
     res$genotypes<-t(as.data.frame(sapply(results[[3]],get4)))
     res$locus<-sapply(results[[3]],get1)
-    matloc<-matrix(unlist(sapply(res$locus,strsplit,'_')),ncol=2,byrow=T)
-    rs<-dbSendQuery(con,paste0("select * from dbSNPs where Locus in ('",paste(matloc[,2],collapse="','"),"')"))
-    res$infoSNPs<-
+    i<-1
+    infSNPs<-NULL
+    for (i in 1:10) {
+      rs<-dbSendQuery(con,paste0("select * from dbSNPs where Locus='",res$locus[2,i],"' and reference='", 
+                               res$locus[3,i],"' and alternative='",res$locus[4,i],"'"))
+      infSNPs<-rbind(infSNPs,unique(fetch(rs, n=-1))[1,])
+    }
+    res$infoSNPs<-infSNPs
     res$scores<-sapply(results[[3]],get2)
     resAll<-c(resAll,list(res))
   }
@@ -39,6 +44,6 @@ con <- dbConnect(RSQLite::SQLite(), "../groupsToComparePartial.db")
 rs<-dbSendQuery(con,"select * from dbSNPs" )
 dbSNPs<-fetch(rs, n=-1)
   
-results<-fromJSON("Web/singVarDeNovo.txt")
+results<-fromJSON("singVarDeNovo.txt")
 
 results<-procRes(results)
