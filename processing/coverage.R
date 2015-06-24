@@ -3,7 +3,7 @@ library(RMySQL)
 createCoverageDB<-function() {
   
   
-  con <- dbConnect(RSQLite::SQLite(), "../../coverage.db")
+  con <- dbConnect(RSQLite::SQLite(), "coverage.db")
   
   #Add X
   for (num in 1:1) {
@@ -33,48 +33,56 @@ retrieveRefEntriesChr<-function(chr,patho,control) {
   
   #10min
   system.time({
-    rs<-dbSendQuery(concoverage,paste0("select * from locus_snps,",chr," where locus_snps.Locus=",chr,".Locus"))
+    rs<-dbSendQuery(concoverage,paste0("select * from locus,",chr," where locus.Locus=",chr,".Locus"))
     coverage<-fetch(rs, n=-1)
   })
   
-  snpsMat<-coverage[,5:37]
-  ISDBMid<-as.vector(unlist(sapply(colnames(snpsMat),substr,11,21)))
+  varMat<-coverage[,7:39]
+  ISDBMid<-as.vector(unlist(sapply(colnames(varMat),substr,11,21)))
   mapping<-read.table('mappingZH_ISDBM.txt',stringsAsFactors=F)
-  i<-match(ISDBMid,mapping[,2])
-  colnames(snpsMat)<-mapping[i,1]
-  rownames(snpsMat)<-coverage$Locus
+  i<-match(mapping[,2],ISDBMid)
+  colnames(varMat)[i]<-mapping[,1]
+  varMat<-varMat[,i]
   
-  snpsMat[snpsMat<thresh]<-NA
-  snpsMat[snpsMat>=thresh]<-0
+  rownames(varMat)<-coverage$Locus
   
-  nb.NA<-apply(snpsMat,1,countNA)
+  varMat[varMat<thresh]<-NA
+  varMat[varMat>=thresh]<-0
+  
+  nb.NA<-apply(varMat,1,countNA)
   i.remove<-which(nb.NA>0)
-  snpsMat<-snpsMat[-i.remove,]
+  varMat<-varMat[-i.remove,]
   
-  select.entry.homozygous<-which((patho$Locus %in% rownames(snpsMat)) & (patho$zygosity=="Homozygous"))
+  idRow<-paste(coverage[-i.remove,1],coverage[-i.remove,2],coverage[-i.remove,3],sep=":")
+  pathoVars<-paste(patho$Locus,patho$reference,patho$alternative,sep=":")
+  controlVars<-paste(control$Locus,control$reference,control$alternative,sep=":")
+  rownames(varMat)<-idRow
+  
+  select.entry.homozygous<-which((pathoVars %in% idRow) & (patho$zygosity=="Homozygous"))
   for (i in select.entry.homozygous) 
-    snpsMat[patho$Locus[i],patho$patient[i]]<-2
+    varMat[pathoVars[i],patho$patient[i]]<-2
   
-  select.entry.heterozygous<-which((patho$Locus %in% rownames(snpsMat)) & (patho$zygosity=="Heterozygous"))
+  select.entry.heterozygous<-which((pathoVars %in% idRow) & (patho$zygosity=="Heterozygous"))
   for (i in select.entry.heterozygous) 
-    snpsMat[patho$Locus[i],patho$patient[i]]<-1
+    varMat[pathoVars[i],patho$patient[i]]<-1
   
-  select.entry.homozygous<-which((control$Locus %in% rownames(snpsMat)) & (control$zygosity=="Homozygous"))
+  select.entry.homozygous<-which((controlVars %in% idRow) & (control$zygosity=="Homozygous"))
   for (i in select.entry.homozygous) 
-    snpsMat[control$Locus[i],control$patient[i]]<-2
+    varMat[controlVars[i],control$patient[i]]<-2
   
-  select.entry.heterozygous<-which((control$Locus %in% rownames(snpsMat)) & (control$zygosity=="Heterozygous"))
+  select.entry.heterozygous<-which((controlVars %in% idRow) & (control$zygosity=="Heterozygous"))
   for (i in select.entry.heterozygous) 
-    snpsMat[control$Locus[i],control$patient[i]]<-1
+    varMat[controlVars[i],control$patient[i]]<-1
   
-  snpsMat
+  varMat<-cbind(Locus=coverage[-i.remove,1],reference=coverage[-i.remove,2],alternative=coverage[-i.remove,3],varMat)
+  varMat
 }
 
 retrieveRefEntries<-function() {
   
   #Move patho and control groups to coverage DB
-  congroups <- dbConnect(RSQLite::SQLite(), "../../groupsToComparePartial.db")
-  concoverage<- dbConnect(RSQLite::SQLite(), "../../coverage.db")
+  congroups <- dbConnect(RSQLite::SQLite(), "groupsToComparePartial.db")
+  concoverage<- dbConnect(RSQLite::SQLite(), "coverage.db")
   
   rs<-dbSendQuery(congroups,"select * from patho" )
   patho<-fetch(rs, n=-1)
@@ -84,15 +92,14 @@ retrieveRefEntries<-function() {
   #dbWriteTable(concoverage,"patho",patho,overwrite=T)
   #dbWriteTable(concoverage,"control",control,overwrite=T)
   
-  locusSNPs<-data.frame(unique(patho$Locus),stringsAsFactors=F)
-  colnames(locusSNPs)<-"Locus"
-  dbWriteTable(concoverage,"locus_snps",locusSNPs,overwrite=T)
+  locusSNPs<-data.frame(unique(patho[,c("Locus",'reference','alternative')]),stringsAsFactors=F)
+  dbWriteTable(concoverage,"locus",locusSNPs,overwrite=T)
   
-  snpsMat<-NULL
+  varMat<-NULL
   
   for (chr in 1:1) {
     print(chr)
-    st<-system.time(snpsMat<-rbind(snpsMat,retrieveRefEntriesChr(paste0("chr",chr),patho,control)))
+    st<-system.time(varMat<-rbind(varMat,retrieveRefEntriesChr(paste0("chr",chr),patho,control)))
     print(st)
                    
   }
@@ -100,20 +107,11 @@ retrieveRefEntries<-function() {
   rs<-dbSendQuery(congroups,"select * from dbSNPs" )
   dbSNPs<-fetch(rs, n=-1)
   
-  mapping_gene<-match(rownames(snpsMat),dbSNPs$Locus)
-  rownames_extended<-paste(dbSNPs$gene_ensembl[mapping_gene],rownames(snpsMat),sep="_")
-  rownames(snpsMat)<-rownames_extended
-  snpsMat<-snpsMat[sort(rownames(snpsMat),index.return=T)$ix,]
+  mapping_gene<-match(varMat$Locus,dbSNPs$Locus)
+  varMat<-cbind(geneid=dbSNPs$gene_ensembl[mapping_gene],varMat)
+  varMat<-varMat[sort(as.character(varMat$Locus),index.return=T)$ix,]
   
-  patient_patho<-unique(patho$patient)
-  
-  patient_data<-read.table("mappingZH_ISDBM_withFMC.txt")
-  
-  match.patient<-match(patient_data[,1],colnames(snpsMat))
-  colnames(snpsMat)[match.patient]<-paste(patient_data[,1],patient_data[,3],sep="_")
-  
-  save(file="../../snpsMat.Rdata",snpsMat)
-  write.table(file="../../snpsMat.txt",snpsMat)
+  write.table(file="varMat.txt",varMat,col.names=F,row.names=F)
   
 }
 

@@ -20,7 +20,7 @@ base_range<-c(7440000,7490000)
 
 list_variants<-c("rs3803800")
 
-getSNPsLocalVCF1000Genomes<-function(chr, range, patients) {
+getvariantsLocalVCF1000Genomes<-function(chr, range, patients) {
   #To update for selecting chr range patients fields
   
   path_vcf<-"~/bridge/data/1000genomes/originalVCF/"
@@ -35,7 +35,7 @@ getSNPsLocalVCF1000Genomes<-function(chr, range, patients) {
 }
 
 
-getSNPsInfosHighlander<-function(samples,chromosome=NULL,base_range=NULL) {
+getvariantsInfosHighlander<-function(samples,chromosome=NULL,base_range=NULL) {
   
   if (is.null(chromosome)) chr_select<-""
   else chr_select<-paste0("and chr=",chromosome)
@@ -44,36 +44,36 @@ getSNPsInfosHighlander<-function(samples,chromosome=NULL,base_range=NULL) {
   else base_range_select<-paste0("and pos>=",base_range[1]," and pos<=",base_range[2])
   
   require(RMySQL)
-  source("../../connectHighlander.R")
+  source("../connectHighlander.R")
   
   samples_select<-paste(samples,collapse="' OR patient='")
   
   sql<-paste0("
   select 
   patient,chr,pos,read_depth,
-  zygosity,reference, alternative, gene_symbol,
+  zygosity,reference, alternative, change_type, gene_symbol,
   gene_ensembl, num_genes,clinvar_rs, 
+  consensus_MAF, consensus_MAC,
   dbsnp_id_137,
   allelic_depth_ref,
   allelic_depth_alt,
   snpeff_effect, snpeff_impact,
-  consensus_maf,
   cadd_phred,cadd_raw,vest_score,pph2_hdiv_score, pph2_hdiv_pred, 
   pph2_hvar_score, pph2_hvar_pred, sift_score, sift_pred, short_tandem_repeat
   from exomes_ug
-  where change_type='SNP' and 
+  where 
         filters='PASS' and
-        read_depth>15 and
+        read_depth>10 and
         mapping_quality_zero_reads=0 and
         downsampled='false' and
         allele_num=2 and
         genotype_quality>70 and
-        
+        snpeff_effect<>'SYNONYMOUS_CODING' and 
               (patient='", samples_select,"') ",
               chr_select,
               base_range_select
   )
-  
+  #change_type='SNP' and 
   rs = dbSendQuery(highlanderdb,sql )
   data = fetch(rs, n=-1)
   
@@ -84,51 +84,55 @@ getSNPsInfosHighlander<-function(samples,chromosome=NULL,base_range=NULL) {
 }
 
 
-createSNPsHighlanderDB<-function() {
+createvariantsHighlanderDB<-function() {
   #Load all data from Erasme trios. 
   
-  load(file="web/mySampleGroups.Rdata")
+  load(file="Web/mySampleGroups.Rdata")
   
+#   system.time(
+#     variants_patho<-getvariantsInfosHighlander(mySampleGroups[[2]][[1]],chr="1") #Patho
+#   )
+#   system.time(
+#     variants_control<-getvariantsInfosHighlander(mySampleGroups[[2]][[2]],chr="1") #Control
+#   )
   system.time(
-    SNPs_patho<-getSNPsInfosHighlander(mySampleGroups[[2]][[1]],chr="1") #Patho
+    variants_patho<-getvariantsInfosHighlander(mySampleGroups[[2]][[1]]) #Patho
   )
   system.time(
-    SNPs_control<-getSNPsInfosHighlander(mySampleGroups[[2]][[2]],chr="1") #Control
+    variants_control<-getvariantsInfosHighlander(mySampleGroups[[2]][[2]]) #Control
   )
   
-  chr<-SNPs_patho[,"chr"]
-  pos<-SNPs_patho[,"pos"]
-  id_SNPs_patho<-paste(chr,pos,sep=":")
-  SNPs_patho$Locus<-id_SNPs_patho
+  chr<-variants_patho[,"chr"]
+  pos<-variants_patho[,"pos"]
+  id_variants_patho<-paste(chr,pos,sep=":")
+  variants_patho$Locus<-id_variants_patho
   
-  chr<-SNPs_control[,"chr"]
-  pos<-SNPs_control[,"pos"]
-  id_SNPs_control<-paste(chr,pos,sep=":")
-  SNPs_control$Locus<-id_SNPs_control
+  chr<-variants_control[,"chr"]
+  pos<-variants_control[,"pos"]
+  id_variants_control<-paste(chr,pos,sep=":")
+  variants_control$Locus<-id_variants_control
   
-  id_control_to_remove<-setdiff(id_SNPs_control,id_SNPs_patho)
-  i<-which(id_SNPs_control %in% id_control_to_remove)
-  if (length(i)>0) SNPs_control<-SNPs_control[-i,]
+  id_control_to_remove<-setdiff(id_variants_control,id_variants_patho)
+  i<-which(id_variants_control %in% id_control_to_remove)
+  if (length(i)>0) variants_control<-variants_control[-i,]
   
   
-  dbSNPs<-SNPs_patho[,c('Locus','chr', 'pos', 'dbsnp_id_137','gene_ensembl', 'gene_symbol',
-                        'reference','alternative','num_genes','clinvar_rs',
+  dbvariants<-variants_patho[,c('Locus','chr', 'pos', 'dbsnp_id_137','gene_ensembl', 'gene_symbol',
+                        'reference','alternative','change_type','num_genes','clinvar_rs',
                         'snpeff_effect', 'snpeff_impact',
-                        'consensus_maf',
+                        'consensus_MAC','consensus_MAF',
                         'cadd_phred','cadd_raw','vest_score','pph2_hdiv_score','pph2_hdiv_pred', 
                         'pph2_hvar_score', 'pph2_hvar_pred', 'sift_score', 'sift_pred', 'short_tandem_repeat'
                      )]
   
-  SNPs_patho<-SNPs_patho[,c("patient","chr","pos","Locus","read_depth","zygosity",'allelic_depth_ref',
-                            'allelic_depth_alt')]
-  SNPs_control<-SNPs_control[,c("patient","chr","pos","Locus","read_depth","zygosity",'allelic_depth_ref',
-                                'allelic_depth_alt')]
+  variants_patho<-variants_patho[,c("patient","chr","pos","Locus","read_depth","zygosity",'reference','alternative')]
+  variants_control<-variants_control[,c("patient","chr","pos","Locus","read_depth","zygosity",'reference','alternative')]
   
   system.time({
     con <- dbConnect(RSQLite::SQLite(), "groupsToComparePartial.db")
-    dbWriteTable(con,"patho",SNPs_patho,overwrite=T)
-    dbWriteTable(con,"control",SNPs_control,overwrite=T)
-    dbWriteTable(con,"dbSNPs",dbSNPs,overwrite=T)
+    dbWriteTable(con,"patho",variants_patho,overwrite=T)
+    dbWriteTable(con,"control",variants_control,overwrite=T)
+    dbWriteTable(con,"dbvariants",dbvariants,overwrite=T)
     dbDisconnect(con)
   })
   
