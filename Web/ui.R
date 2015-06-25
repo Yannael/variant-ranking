@@ -68,7 +68,7 @@ shinyUI(fluidPage(
                                            selectize = FALSE)
                         ),
                         column(4,offset=1,
-                               h3("2) Engine parameters"),
+                               h3("2) Ranking parameters"),
                                radioButtons("rankingScale", "Ranking scale",
                                             c("Gene" = "gene",
                                               "Variant" = "variant"
@@ -108,13 +108,16 @@ shinyUI(fluidPage(
                       fluidRow(
                         column(3,
                                selectInput('selectedResultGroup', 'Select result ID', choices = list(
-                                 "Available results" = res$name
+                                 "Available results" = results$name
                                ), selectize = FALSE)
                         )
                       ),
                       hr(),
+                      fluidRow(
+                        column(12,
                       uiOutput("resultsPanel")
-                     
+                        )
+                      )
              )
            )
     ))
