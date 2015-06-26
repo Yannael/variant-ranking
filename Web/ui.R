@@ -44,7 +44,9 @@ shinyUI(fluidPage(
                                div(
                                  DT::dataTableOutput('phenotypesTable'),
                                  tags$style(type="text/css", '.shiny-datatable-output tfoot {display:table-header-group;}')
-                                 , style = 'width:690px;')
+                                 , style = 'width:690px;'),
+                               tags$div(class="extraspace1")
+                               
                         )
                         
                       )
@@ -108,19 +110,22 @@ shinyUI(fluidPage(
                       fluidRow(
                         column(3,
                                selectInput('selectedResultGroup', 'Select result ID', choices = list(
-                                 "Available results" = results$name
-                               ), selectize = FALSE)
+                                 "Available results" = names(results)
+                               ), selected="Trios_Compound_Heterozygous",selectize = FALSE)
                         )
                       ),
                       hr(),
                       fluidRow(
                         column(12,
-                      uiOutput("resultsPanel")
+                      uiOutput("resultsPanel"),
+                      tags$div(class="extraspace1")
                         )
+                      
                       )
              )
            )
-    ))
+    )
+ )
   
 ))
 
