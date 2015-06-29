@@ -69,151 +69,100 @@ shinyServer(function(input, output,session) {
     }
   })
   
+  
   output$variantsMetadataTable<-DT::renderDataTable({
     if (length(input$resultsTable_rows_selected)>0) {
-      res<-NULL
+      widget<-NULL
       if (sessionvalues$currentResults$type=="singleVariant") {
         infovariants<-sessionvalues$currentResults$infovariants[input$resultsTable_rows_selected,]
         data<-cbind(names(infovariants),t(infovariants))
-        #browser()
         colnames(data)<-c("Variable","Value")
-        #action = dataTableAjax(session, data)
-        if (!is.null(dim(data))) {
-          widget = datatable(data, 
-                             server = FALSE, 
-                             extensions = c('Scroller'),
-                             escape=F,
-                             selection = 'single',
-                             filter = 'bottom',
-                             rownames=F,
-                             options = list(
-                               dom= 'tS',
-                               deferRender = TRUE,
-                               scrollY = 335,
-                               #ajax = list(url = action),
-                               #colVis=list(exclude=c(0)),
-                               scrollCollapse = T,
-                               #lengthMenu = list(c(10, 25, 100), c('10', '25','100')),pageLength = 10,
-                               autoWidth = F,
-                               columnDefs = list(
-                                 list(className="dt-right",targets="_all")
-                               )
-                             )
-          )
-          res<-widget
-        }
       }
       if (sessionvalues$currentResults$type=="pairVariantsMonogenic") {
         infovariants1<-sessionvalues$currentResults$infovariants1[input$resultsTable_rows_selected,]
         infovariants2<-sessionvalues$currentResults$infovariants2[input$resultsTable_rows_selected,]
         data<-cbind(names(infovariants1),t(infovariants1),t(infovariants2))
-        #browser()
-        data[is.na(data)]<-"NA"
         colnames(data)<-c("Variable","Value1","Value2")
-        action = dataTableAjax(session, data,rownames=F)
-        if (!is.null(dim(data))) {
-          widget = datatable(data, 
-                             server = TRUE, 
-                             #extensions = c('Scroller'),
-                             selection = 'single',
-                             rownames=F,
-                             filter = 'bottom',
-                             escape=T,
-                             options = list(
-                               dom= 't',
-                               #lengthMenu = list(c(100), c('100')),
-                               pageLength = 100,
-                               #deferRender = FALSE,
-                               scrollY = 335,
-                               ajax = list(url = action),
-                               columnDefs = list(
-                                 list(
-                                   targets = c(1,2),
-                                   render = JS(
-                                     "function(data, type, row, meta) {",
-                                     "return type === 'display' && data.length > 15 ?",
-                                     "'<span title=\"' + data + '\">' + data.substr(0, 11) + '...</span>' : data;",
-                                     "}")
-                                 ),
-                                 #list(width=c(59),targets=c(1)),
-                                 #list(visible=F,targets=c(0)),
-                                 list(className="dt-right",targets="_all")
-                               )
-                             )
-          )
-          res<-widget
-        }
       }
-      res
+      data[is.na(data)]<-"NA"
+      action = dataTableAjax(session, data,rownames=F)
+      if (!is.null(dim(data))) {
+        widget <- datatable(data, 
+                            server = TRUE, 
+                            selection = 'single',
+                            rownames=F,
+                            filter = 'bottom',
+                            escape=T,
+                            options = list(
+                              dom= 't',
+                              pageLength = 100,
+                              scrollY = 335,
+                              ajax = list(url = action),
+                              columnDefs = list(
+                                list(
+                                  targets = c(1),
+                                  render = JS(
+                                    "function(data, type, row, meta) {",
+                                    "return type === 'display' && data.length > 15 ?",
+                                    "'<span title=\"' + data + '\">' + data.substr(0, 11) + '...</span>' : data;",
+                                    "}")
+                                ),
+                                list(className="dt-right",targets="_all")
+                              )
+                            )
+        )
+      }
+      widget 
     }
   })
   
+  getMatGenoTrio<-function(genotypes,namecols) {
+    genotypes<-factor(genotypes,levels=c("0","1","2","NA"))
+    genotypes<-mapvalues(genotypes,from=c(0,1,2,"NA"),to=c("Ref/Ref","Ref/Alt","Alt/Alt","NA"))
+    
+    DF<-data.frame(rep(paste(rep("Trio ",11),1:11,sep=""),each=3),rep(namecols,11),genotypes)
+    DF[,1]<-factor(DF[,1],levels=rev(unique(DF[,1])),ordered=T)
+    colnames(DF)<-c("Trios","FMC","Zygosity")
+    
+    DF
+  }
   
   output$heatMapGenotypes<-renderPlot({
     if (length(input$resultsTable_rows_selected)>0) {
       res<-NULL
+      DF<-NULL
+      genotypes<-sessionvalues$currentResults$genotypes[[input$resultsTable_rows_selected]]
       if (sessionvalues$currentResults$type=="singleVariant") {
-        genotypes<-sessionvalues$currentResults$genotypes[input$resultsTable_rows_selected,]
-        genotypes<-factor(genotypes,levels=c("0","1","2","NA"))
-        genotypes<-mapvalues(genotypes,from=c(0,1,2,"NA"),to=c("Ref/Ref","Ref/Alt","Alt/Alt","NA"))
-        
-        DF<-data.frame(rep(paste(rep("Trio ",11),1:11,sep=""),each=3),rep(c("Child","Father","Mother"),11),genotypes)
-        DF[,1]<-factor(DF[,1],levels=rev(unique(DF[,1])),ordered=T)
-        colnames(DF)<-c("Trios","FMC","Zygosity")
-        
-        base_size=20
-        p<-ggplot(DF, aes(y=Trios,x=FMC))
-        p <- p + geom_tile(aes(fill=Zygosity),colour = "white")
-        p <- p +  theme_grey(base_size = base_size) + labs(x = "", y = "") + 
-          scale_x_discrete(expand = c(0, 0)) +
-          scale_y_discrete(expand = c(0, 0)) +
-          theme(aspect.ratio=3)+
-          theme(axis.title.x = element_blank(),
-                axis.text.x = element_text(size = base_size *  0.8, angle = 330,hjust = 0, colour = "grey50")) 
-        p<-p+ scale_fill_manual(breaks=c("Ref/Ref","Ref/Alt","Alt/Alt","NA"),
-                                values=c("#fff7bc","#fec44f","#d95f0e","000000"),
-                                #values=c("#ece7f2","#a6bddb","#2b8cbe","000000"),
-                                name="Zigosity")
-        
-        p
-        res<-p
+        DF<-getMatGenoTrio(genotypes,c("Child","Father","Mother"))
+        aspect.ratio<-3
       }
       if (sessionvalues$currentResults$type=="pairVariantsMonogenic") {
-        genotypes1<-sessionvalues$currentResults$genotypes1[input$resultsTable_rows_selected,]
-        genotypes1<-factor(genotypes1,levels=c("0","1","2","NA"))
-        genotypes1<<-mapvalues(genotypes1,from=c(0,1,2,"NA"),to=c("Ref/Ref","Ref/Alt","Alt/Alt","NA"))
-        genotypes2<-sessionvalues$currentResults$genotypes2[input$resultsTable_rows_selected,]
-        genotypes2<-factor(genotypes2,levels=c("0","1","2","NA"))
-        genotypes2<<-mapvalues(genotypes2,from=c(0,1,2,"NA"),to=c("Ref/Ref","Ref/Alt","Alt/Alt","NA"))
-        
-        DF1<-data.frame(rep(paste(rep("Trio ",11),1:11,sep=""),each=3),rep(c("Child variant 1","Father variant 1","Mother variant 1"),11),genotypes1)
-        colnames(DF1)<-c("Trios","FMC","Zygosity")
-        DF2<-data.frame(rep(paste(rep("Trio ",11),1:11,sep=""),each=3),rep(c("Child variant 2","Father variant 2","Mother variant 2"),11),genotypes2)
-        colnames(DF2)<-c("Trios","FMC","Zygosity")
+        DF1<-getMatGenoTrio(genotypes[1,],c("Child variant 1","Father variant 1","Mother variant 1"))
+        DF2<-getMatGenoTrio(genotypes[2,],c("Child variant 2","Father variant 2","Mother variant 2"))
         DF<-rbind(DF1,DF2)
-        
-        DF[,1]<-factor(DF[,1],levels=rev(unique(DF[,1])),ordered=T)
-        DF[,2]<-factor(DF[,2],levels=sort(levels(DF[,2])),ordered=T)
-        
-        base_size=20
-        p<-ggplot(DF, aes(y=Trios,x=FMC))
-        p <- p + geom_tile(aes(fill=Zygosity),colour = "white")
-        p <- p +  theme_grey(base_size = base_size) + labs(x = "", y = "") + 
-          scale_x_discrete(expand = c(0, 0)) +
-          scale_y_discrete(expand = c(0, 0)) +
-          theme(aspect.ratio=1.5)+
-          theme(axis.title.x = element_blank(),
-                axis.text.x = element_text(size = base_size *  0.8, angle = 310,hjust = 0, colour = "grey50")) 
-        p<-p+ scale_fill_manual(breaks=c("Ref/Ref","Ref/Alt","Alt/Alt","NA"),
-                                values=c("#fff7bc","#fec44f","#d95f0e","000000"),
-                                #values=c("#ece7f2","#a6bddb","#2b8cbe","000000"),
-                                name="Zigosity")
-        
-        res<-p
+        aspect.ratio<-1.7
       }
-      res
+      
+      #DF[,1]<-factor(DF[,1],levels=rev(unique(DF[,1])),ordered=T)
+      DF[,2]<-factor(DF[,2],levels=sort(levels(DF[,2])),ordered=T)
+      
+      base_size=20
+      p<-ggplot(DF, aes(y=Trios,x=FMC))
+      p <- p + geom_tile(aes(fill=Zygosity),colour = "white")
+      p <- p +  theme_grey(base_size = base_size) + labs(x = "", y = "") + 
+        scale_x_discrete(expand = c(0, 0)) +
+        scale_y_discrete(expand = c(0, 0)) +
+        theme(aspect.ratio=aspect.ratio)+
+        theme(axis.title.x = element_blank(),
+              axis.text.x = element_text(size = base_size *  0.8, angle = 330,hjust = 0, colour = "grey50")) 
+      p<-p+ scale_fill_manual(breaks=c("Ref/Ref","Ref/Alt","Alt/Alt","NA"),
+                              values=c("#fff7bc","#fec44f","#d95f0e","000000"),
+                              #values=c("#ece7f2","#a6bddb","#2b8cbe","000000"),
+                              name="Zigosity")
+      p
     }
   })
+
   
   output$resultsMetadata<-renderUI({
     fluidRow(
@@ -253,7 +202,7 @@ shinyServer(function(input, output,session) {
                ),
                column(5,offset=1,
                       fluidRow(
-                        h4("Genotypes Variants/samples"),
+                        h4("Genotypes trios"),
                         plotOutput("heatMapGenotypes")
                       )
                )
