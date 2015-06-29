@@ -6,14 +6,27 @@ createCoverageDB<-function() {
   con <- dbConnect(RSQLite::SQLite(), "coverage.db")
   
   #Add X
-  for (num in 1:1) {
+  for (num in 16:22) {
     if (num<10) add0<-"0" else add0<-""
     
     filename<-paste0("/home/yleborgn/bridge/data/erasme/coverage/ISDBMbatch_coverage_chr",add0,num,"_trios_seqCap")
     
     #Takes about 5 minutes
-    system.time(CoverageTab<-read.table(filename,header=T))
+    st<-system.time(CoverageTab<-read.table(filename,header=T))
+    print(st)
+    #30s
+    system.time({
+      dbWriteTable(con,paste0("chr",num),CoverageTab,overwrite=T)
+    })
+  }
+  for (num in c("X","Y")) {
+    add0<-""
     
+    filename<-paste0("/home/yleborgn/bridge/data/erasme/coverage/ISDBMbatch_coverage_chr",add0,num,"_trios_seqCap")
+    
+    #Takes about 5 minutes
+    st<-system.time(CoverageTab<-read.table(filename,header=T))
+    print(st)
     #30s
     system.time({
       dbWriteTable(con,paste0("chr",num),CoverageTab,overwrite=T)
@@ -29,9 +42,9 @@ countNA<-function(x) {length(which(is.na(x)))}
 
 retrieveRefEntriesChr<-function(chr,patho,control) {
   
-  thresh<-15
+  thresh<-10
   
-  #10min
+  #1,5min
   system.time({
     rs<-dbSendQuery(concoverage,paste0("select * from locus,",chr," where locus.Locus=",chr,".Locus"))
     coverage<-fetch(rs, n=-1)
@@ -44,7 +57,7 @@ retrieveRefEntriesChr<-function(chr,patho,control) {
   colnames(varMat)[i]<-mapping[,1]
   varMat<-varMat[,i]
   
-  rownames(varMat)<-coverage$Locus
+  rownames(varMat)<-apply(coverage[,1:3],1,paste,collapse=":")
   
   varMat[varMat<thresh]<-NA
   varMat[varMat>=thresh]<-0
@@ -53,10 +66,9 @@ retrieveRefEntriesChr<-function(chr,patho,control) {
   i.remove<-which(nb.NA>0)
   varMat<-varMat[-i.remove,]
   
-  idRow<-paste(coverage[-i.remove,1],coverage[-i.remove,2],coverage[-i.remove,3],sep=":")
   pathoVars<-paste(patho$Locus,patho$reference,patho$alternative,sep=":")
   controlVars<-paste(control$Locus,control$reference,control$alternative,sep=":")
-  rownames(varMat)<-idRow
+  idRow<-rownames(varMat)
   
   select.entry.homozygous<-which((pathoVars %in% idRow) & (patho$zygosity=="Homozygous"))
   for (i in select.entry.homozygous) 
@@ -92,26 +104,33 @@ retrieveRefEntries<-function() {
   #dbWriteTable(concoverage,"patho",patho,overwrite=T)
   #dbWriteTable(concoverage,"control",control,overwrite=T)
   
-  locusSNPs<-data.frame(unique(patho[,c("Locus",'reference','alternative')]),stringsAsFactors=F)
-  dbWriteTable(concoverage,"locus",locusSNPs,overwrite=T)
+  locusvariants<-data.frame(unique(patho[,c("Locus",'reference','alternative')]),stringsAsFactors=F)
+  dbWriteTable(concoverage,"locus",locusvariants,overwrite=T)
   
   varMat<-NULL
   
-  for (chr in 1:1) {
+  for (chr in c("X","Y")) {
     print(chr)
     st<-system.time(varMat<-rbind(varMat,retrieveRefEntriesChr(paste0("chr",chr),patho,control)))
     print(st)
                    
   }
   
-  rs<-dbSendQuery(congroups,"select * from dbSNPs" )
-  dbSNPs<-fetch(rs, n=-1)
+  rs<-dbSendQuery(congroups,"select * from dbvariants" )
+  dbvariants<-fetch(rs, n=-1)
   
-  mapping_gene<-match(varMat$Locus,dbSNPs$Locus)
-  varMat<-cbind(geneid=dbSNPs$gene_ensembl[mapping_gene],varMat)
+  
+  mapping_gene<-match(varMat$Locus,dbvariants$Locus)
+  varMat<-cbind(geneid=dbvariants$gene_ensembl[mapping_gene],varMat)
   varMat<-varMat[sort(as.character(varMat$Locus),index.return=T)$ix,]
   
-  write.table(file="varMat.txt",varMat,col.names=F,row.names=F)
+  #i.keep<-which((dbvariants[,'consensus_MAF']<0.01 | dbvariants[,'consensus_MAC']<1000) &(dbvariants[,'gene_symbol']!="NA"))
+  i.keep<-which((dbvariants[,'consensus_MAF']<0.01 | dbvariants[,'consensus_MAC']<1000) )
+  id.keep<-dbvariants[i.keep,'uniqueid']
+  i.keep<-match(id.keep,rownames(varMat))
+  varMat<-varMat[i.keep,]
+  
+  write.table(file="varMat2.txt",varMat,col.names=F,row.names=F,quote=F)
   
 }
 
