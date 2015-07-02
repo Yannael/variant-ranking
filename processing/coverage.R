@@ -124,9 +124,12 @@ retrieveRefEntries<-function() {
   varMat<-cbind(geneid=dbvariants$gene_ensembl[mapping_gene],varMat)
   varMat<-varMat[sort(as.character(varMat$Locus),index.return=T)$ix,]
   
-  #i.keep<-which((dbvariants[,'consensus_MAF']<0.01 | dbvariants[,'consensus_MAC']<1000) &(dbvariants[,'gene_symbol']!="NA"))
-  i.keep<-which((dbvariants[,'consensus_MAF']<0.01 | dbvariants[,'consensus_MAC']<1000) )
+  i.remove<-which(is.na(varMat[,1]))
+  varMat<-varMat[-i.remove,]
+  
+  i.keep<-which((dbvariants[,'consensus_MAF']<0.01 | dbvariants[,'consensus_MAC']<1000) &(dbvariants[,'gene_symbol']!="NA"))
   id.keep<-dbvariants[i.keep,'uniqueid']
+  id.keep<-intersect(id.keep,rownames(varMat))
   i.keep<-match(id.keep,rownames(varMat))
   varMat<-varMat[i.keep,]
   
