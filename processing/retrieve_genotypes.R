@@ -89,12 +89,12 @@ createvariantsHighlanderDB<-function() {
   
   load(file="Web/mySampleGroups.Rdata")
   
-#   system.time(
-#     variants_patho<-getvariantsInfosHighlander(mySampleGroups[[2]][[1]],chr="1") #Patho
-#   )
-#   system.time(
-#     variants_control<-getvariantsInfosHighlander(mySampleGroups[[2]][[2]],chr="1") #Control
-#   )
+  #   system.time(
+  #     variants_patho<-getvariantsInfosHighlander(mySampleGroups[[2]][[1]],chr="1") #Patho
+  #   )
+  #   system.time(
+  #     variants_control<-getvariantsInfosHighlander(mySampleGroups[[2]][[2]],chr="1") #Control
+  #   )
   system.time(
     variants_patho<-getvariantsInfosHighlander(mySampleGroups[[2]][[1]]) #Patho
   )
@@ -118,15 +118,22 @@ createvariantsHighlanderDB<-function() {
   
   
   dbvariants<-variants_patho[,c('Locus','chr', 'pos', 'dbsnp_id_137','gene_ensembl', 'gene_symbol',
-                        'reference','alternative','change_type','num_genes','clinvar_rs',
-                        'snpeff_effect', 'snpeff_impact',
-                        'consensus_MAC','consensus_MAF',
-                        'cadd_phred','cadd_raw','vest_score','pph2_hdiv_score','pph2_hdiv_pred', 
-                        'pph2_hvar_score', 'pph2_hvar_pred', 'sift_score', 'sift_pred', 'short_tandem_repeat'
-                     )]
+                                'reference','alternative','change_type','num_genes','clinvar_rs',
+                                'snpeff_effect', 'snpeff_impact',
+                                'consensus_MAC','consensus_MAF',
+                                'cadd_phred','cadd_raw','vest_score','pph2_hdiv_score','pph2_hdiv_pred', 
+                                'pph2_hvar_score', 'pph2_hvar_pred', 'sift_score', 'sift_pred', 'short_tandem_repeat'
+  )]
   
   variants_patho<-variants_patho[,c("patient","chr","pos","Locus","read_depth","zygosity",'reference','alternative')]
   variants_control<-variants_control[,c("patient","chr","pos","Locus","read_depth","zygosity",'reference','alternative')]
+  
+  uniqueid<-paste(dbvariants$Locus,dbvariants$reference,dbvariants$alternative,sep=":")
+  dbvariants<-cbind(dbvariants,uniqueid)
+  uniqueid<-unique(uniqueid)
+  i.keep<-match(uniqueid,dbvariants$uniqueid)
+  dbvariants<-dbvariants[i.keep,]
+  
   
   system.time({
     con <- dbConnect(RSQLite::SQLite(), "groupsToComparePartial.db")

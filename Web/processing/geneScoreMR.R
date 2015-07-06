@@ -6,6 +6,7 @@ library('rmr2')
 hdfs.init()
 
 infile<-"in.variantMat.csv2"
+#infile<-"snpsMat.tab"
 outfile<-paste0(gsub(" ","_",Sys.time()),"_out.variantMat.csv")
 
 local<-FALSE
@@ -25,8 +26,6 @@ if (local){
   hdfsfile<-paste0("/user/yleborgn/bridge/",infile)
   hdfsoutfile<-paste0("/user/yleborgn/bridge/",outfile)
 }
-
-
 
 createData<-T
 if (createData) {

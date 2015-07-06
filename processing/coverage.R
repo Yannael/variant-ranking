@@ -171,6 +171,25 @@ retrieveRefEntries<-function() {
 
 dummy<-function() {
   
+  save(file="../../snpsMat.Rdata",snpsMat)
+  
+  patient_data<-colnames(snpsMat)
+  patient_data<-sapply(patient_data,strsplit,'_')
+  patient_data<-unlist(patient_data,use.name=F)
+  patient_data<-matrix(patient_data,ncol(v),3,byrow=T)
+  patient_data<-patient_data[order(as.numeric(patient_data[,3]),patient_data[,2]),]
+  snpsMat<-snpsMat[,apply(patient_data,1,paste0,"",collapse="_")]
+              
+  write.table(file="../../snpsMat.txt",snpsMat,col.names=F,quote=F)
+  write.table(file="../../pedigree.txt",patient_data,col.names=F,row.names=F,quote=F)
+  
+  hadoop fs -put snpsMat.txt /user/yleborgn/MR/snpsMat.txt
+  hadoop fs -put pedigree.txt /user/yleborgn/MR/pedigree.txt
+  
+}
+
+dummy<-function() {
+  
   #In highlander: Select patient, read_depth, patho, chr, pos columns
   #Filter with patient ZH135614, chr1
   #Sort by ascending order
