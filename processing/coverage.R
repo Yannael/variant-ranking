@@ -90,6 +90,35 @@ retrieveRefEntriesChr<-function(chr,patho,control) {
   varMat
 }
 
+retrieveRefEntriesChr2<-function(chr,patho,control) {
+  
+  patientID<-read.table('mappingZH_ISDBM_withFMC.txt',stringsAsFactors=F)[,1]
+  
+  entries<-rbind(patho,control)
+  keyLocus<-entries[,c('Locus','reference','alternative')]
+  
+  idRow<-apply(keyLocus,1,paste0,collapse=":")
+  
+  DF<-cbind(idRow, entries[,c('patient','zygosity')])
+  
+  varMat<-dcast(DF,idRow~patient)
+  varMat[is.na(varMat)]<-"0"
+  varMat[varMat=="Heterozygous"]<-"1"
+  varMat[varMat=="Homozygous"]<-"2"
+  
+  idRow<-varMat[,'idRow']
+  locusData<-ldply(sapply(as.character(idRow),strsplit,":"))
+  locus<-apply(locusData[,c(2:3)],1,paste0,collapse=":")
+  rownames(varMat)<-locusData[,1]
+  varMat<-varMat[,-1]
+  
+  i.match<-match(patientID,colnames(varMat))
+  varMat<-varMat[,i.match] 
+  
+  varMat<-cbind(Locus=locus,reference=locusData[,4],alternative=locusData[,5],varMat)
+  varMat
+}
+
 retrieveRefEntries<-function() {
   
   #Move patho and control groups to coverage DB
@@ -109,7 +138,7 @@ retrieveRefEntries<-function() {
   
   varMat<-NULL
   
-  for (chr in c("X","Y")) {
+  for (chr in c(1:22)) {
     print(chr)
     st<-system.time(varMat<-rbind(varMat,retrieveRefEntriesChr(paste0("chr",chr),patho,control)))
     print(st)
@@ -125,9 +154,12 @@ retrieveRefEntries<-function() {
   varMat<-varMat[sort(as.character(varMat$Locus),index.return=T)$ix,]
   
   i.remove<-which(is.na(varMat[,1]))
-  varMat<-varMat[-i.remove,]
+  if (length(i.remove)>0) varMat<-varMat[-i.remove,]
   
-  i.keep<-which((dbvariants[,'consensus_MAF']<0.01 | dbvariants[,'consensus_MAC']<1000) &(dbvariants[,'gene_symbol']!="NA"))
+  i.keep<-which((dbvariants[,'consensus_MAF']<0.01|is.na(dbvariants[,'consensus_MAF']) | dbvariants[,'consensus_MAC']<1000|is.na(dbvariants[,'consensus_MAC'])) 
+                &(dbvariants[,'gene_symbol']!="NA")
+                &(dbvariants[,'snpeff_effect']!="INTRON")
+  )
   id.keep<-dbvariants[i.keep,'uniqueid']
   id.keep<-intersect(id.keep,rownames(varMat))
   i.keep<-match(id.keep,rownames(varMat))
