@@ -1,15 +1,19 @@
 library(shiny)
 library(DT)
+library(queryBuildR)
 
 shinyUI(fluidPage(
   includeCSS('www/style.css'),
- # hr(),
- #tags$div(class="extraspace2"),
- fluidRow(
+  includeCSS('www/query-builder.default.min.css'),
+  #includeCSS('www/bootstrap.min.css'),
+  #tags$head(tags$script(src="bootstrap.min.js")),
+  #tags$head(tags$script(src="jquery.min.js")),
+  #tags$head(tags$script(src="query-builder.js")),
+  tags$head(tags$script(src="query-builder.standalone.js")),
+  fluidRow(
            img(src="mgbck.jpg", height = 150, width = 1000)
            #headerPanel("Gene & Variant Ranking Toolbox")
     ),
- # hr(),
  tags$div(class="extraspace2"),
  fluidRow(
     column(12,
@@ -28,6 +32,20 @@ shinyUI(fluidPage(
                                  "General sample groups" = c('ALL' = 'all', "Erasme" = 'erasme', "1000 genomes"="genomes1000"),
                                  "Saved sample groups" = mySampleGroups[[1]]
                                ), selectize = FALSE)
+                        )
+                      ),
+                      fluidRow(
+                        column(7,
+                               queryBuildROutput("queryBuilder",width="600px",height="100%"),
+                               textOutput("sqlquery"),
+                               actionButton("samplesQuery", label = "Apply filters"),
+                               tags$script('
+                                      document.getElementById("samplesQuery").onclick = function() {
+                                      var sqlQuery = $("#queryBuilder").queryBuilder("getSQL", "question_mark");
+
+                                      Shiny.onInputChange("sqlQuery", sqlQuery);
+                                      };
+                                 ')
                         )
                       ),
                       hr(),
