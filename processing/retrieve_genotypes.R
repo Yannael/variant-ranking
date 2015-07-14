@@ -1,5 +1,4 @@
-#require(bigrquery)
-require(VariantAnnotation)
+require(RMySQL)
 
 priorlist<-c("TUBB2A","TCL1A","BRDG1","HTPAP","PPPAPDC1B","IGKV4","IGLL1",
              "IGKV1D-13","CD798","HS3ST1","SH2D1B","MS4A1","TLR5","FCRL1",
@@ -14,134 +13,81 @@ priorlist<-c("TUBB2A","TCL1A","BRDG1","HTPAP","PPPAPDC1B","IGKV4","IGLL1",
 
 geneIDs<-c("TUBB2A","TCL1A")
 
-#From https://www.ebi.ac.uk/gwas/search?query=iga%20nephropathy
-chromosome<-c("17")
-base_range<-c(7440000,7490000)
-
-list_variants<-c("rs3803800")
-
-getvariantsLocalVCF1000Genomes<-function(chr, range, patients) {
-  #To update for selecting chr range patients fields
-  
-  path_vcf<-"~/bridge/data/1000genomes/originalVCF/"
-  
-  rng <- GRanges(seqnames="17", ranges=IRanges(
-    start=c(base_range[1]),
-    end=c(base_range[2]),
-    names=c("range_analysis")))
-  tab <- TabixFile(paste0(path_vcf,"mod_ALL.chr17.phase3_shapeit2_mvncall_integrated_v5a.20130502.genotypes.vcf.gz"))
-  vcf_rng <- readVcf(tab, "hg19", param=rng)
-  
-}
+#filters='PASS' and
+#read_depth>10 and
+#mapping_quality_zero_reads=0 and
+#downsampled='false' and
+#allele_num=2 and
+#genotype_quality>70 and
+#snpeff_effect<>'SYNONYMOUS_CODING' and 
 
 
-getvariantsInfosHighlander<-function(samples,chromosome=NULL,base_range=NULL) {
+fieldsSequencingInfo<-c("zygosity","read_depth","allelic_depth_ref","allelic_depth_alt")
+fieldsVariantsInfo<-c("chr","pos","reference","alternative",
+                      "change_type", "gene_symbol", "gene_ensembl", "num_genes","clinvar_rs", 
+                      "consensus_MAF","consensus_MAC", "dbsnp_id_137",
+                      "snpeff_effect", "snpeff_impact",
+                      "cadd_phred","cadd_raw","vest_score","pph2_hdiv_score", "pph2_hdiv_pred", 
+                      "pph2_hvar_score", "pph2_hvar_pred", "sift_score", "sift_pred", "short_tandem_repeat")
+
+
+createCopyHighlanderDB<-function() {
   
-  if (is.null(chromosome)) chr_select<-""
-  else chr_select<-paste0("and chr=",chromosome)
-  
-  if (is.null(base_range)) base_range_select<-""
-  else base_range_select<-paste0("and pos>=",base_range[1]," and pos<=",base_range[2])
-  
-  require(RMySQL)
   source("../connectHighlander.R")
   
-  samples_select<-paste(samples,collapse="' OR patient='")
+  variantsdb <- dbConnect(RSQLite::SQLite(), "variants.db")
+  sequencingdb <- dbConnect(RSQLite::SQLite(), "sequencing.db")
   
-  sql<-paste0("
-  select 
-  patient,chr,pos,read_depth,
-  zygosity,reference, alternative, change_type, gene_symbol,
-  gene_ensembl, num_genes,clinvar_rs, 
-  consensus_MAF, consensus_MAC,
-  dbsnp_id_137,
-  allelic_depth_ref,
-  allelic_depth_alt,
-  snpeff_effect, snpeff_impact,
-  cadd_phred,cadd_raw,vest_score,pph2_hdiv_score, pph2_hdiv_pred, 
-  pph2_hvar_score, pph2_hvar_pred, sift_score, sift_pred, short_tandem_repeat
-  from exomes_ug
-  where 
-        filters='PASS' and
-        read_depth>10 and
-        mapping_quality_zero_reads=0 and
-        downsampled='false' and
-        allele_num=2 and
-        genotype_quality>70 and
-        snpeff_effect<>'SYNONYMOUS_CODING' and 
-              (patient='", samples_select,"') ",
-              chr_select,
-              base_range_select
-  )
-  #change_type='SNP' and 
-  rs = dbSendQuery(highlanderdb,sql )
-  data = fetch(rs, n=-1)
+  rs<-dbGetQuery(highlanderdb,"select distinct patient from exomes_ug")[,1]
   
-  dbClearResult(rs)
+  fields_select<-paste(c(fieldsSequencingInfo,fieldsVariantsInfo),collapse=",")
+  
+  for (sample in samples[58:64]) {
+    
+    print(paste0("Processing sample ",sample))
+    
+    sql<-paste0("select ",fields_select," from exomes_ug where 
+                patient='", sample,"'")
+    
+    data <- dbGetQuery(highlanderdb,sql)
+    
+    uniqueID<-paste(data$chr, data$pos, data$reference, data$alternative, sep=":")
+    
+    zygosity<-data$zygosity
+    zygosity[zygosity=="Homozygous"]<-2
+    zygosity[zygosity=="Heterozygous"]<-1
+    
+    sequencingInfo<-cbind(ID=uniqueID,zygosity=zygosity,read_depth=data$read_depth,
+                          allelic_depth_ref=data$allelic_depth_ref,
+                          allelic_depth_alt=data$allelic_depth_alt)
+    
+    sample<-gsub('-','',sample)
+    dbWriteTable(sequencingdb,sample,as.data.frame(sequencingInfo),overwrite=T)
+    
+    print(paste0(nrow(sequencingInfo)," variant entries"))
+    
+    variantsInfo<-cbind(ID=uniqueID,data[,fieldsVariantsInfo])
+    
+    if (length(unique(uniqueID))<length(uniqueID)) stop(paste0("Sample ",sample," has duplicate variant unique ID"))
+    
+    if (length(dbListTables(variantsdb))==0) {
+      dbWriteTable(variantsdb,"variants",variantsInfo)
+    }
+    else {
+      idInDB<-dbGetQuery(variantsdb,"select distinct ID from variants")[,1]
+      toKeep<-setdiff(variantsInfo$ID,idInDB)
+      if (length(toKeep)>0) {
+        toKeepIndex<-which(variantsInfo$ID %in% toKeep)
+        print(paste0(length(toKeepIndex)," variant entries added to variants DB"))
+        dbWriteTable(variantsdb,"variants",variantsInfo[toKeepIndex,],append=T)
+      }
+    }
+    
+  }
+  
   dbDisconnect(highlanderdb)
-  
-  data
-}
-
-
-createvariantsHighlanderDB<-function() {
-  #Load all data from Erasme trios. 
-  
-  load(file="Web/mySampleGroups.Rdata")
-  
-  #   system.time(
-  #     variants_patho<-getvariantsInfosHighlander(mySampleGroups[[2]][[1]],chr="1") #Patho
-  #   )
-  #   system.time(
-  #     variants_control<-getvariantsInfosHighlander(mySampleGroups[[2]][[2]],chr="1") #Control
-  #   )
-  system.time(
-    variants_patho<-getvariantsInfosHighlander(mySampleGroups[[2]][[1]]) #Patho
-  )
-  system.time(
-    variants_control<-getvariantsInfosHighlander(mySampleGroups[[2]][[2]]) #Control
-  )
-  
-  chr<-variants_patho[,"chr"]
-  pos<-variants_patho[,"pos"]
-  id_variants_patho<-paste(chr,pos,sep=":")
-  variants_patho$Locus<-id_variants_patho
-  
-  chr<-variants_control[,"chr"]
-  pos<-variants_control[,"pos"]
-  id_variants_control<-paste(chr,pos,sep=":")
-  variants_control$Locus<-id_variants_control
-  
-  id_control_to_remove<-setdiff(id_variants_control,id_variants_patho)
-  i<-which(id_variants_control %in% id_control_to_remove)
-  if (length(i)>0) variants_control<-variants_control[-i,]
-  
-  
-  dbvariants<-variants_patho[,c('Locus','chr', 'pos', 'dbsnp_id_137','gene_ensembl', 'gene_symbol',
-                                'reference','alternative','change_type','num_genes','clinvar_rs',
-                                'snpeff_effect', 'snpeff_impact',
-                                'consensus_MAC','consensus_MAF',
-                                'cadd_phred','cadd_raw','vest_score','pph2_hdiv_score','pph2_hdiv_pred', 
-                                'pph2_hvar_score', 'pph2_hvar_pred', 'sift_score', 'sift_pred', 'short_tandem_repeat'
-  )]
-  
-  variants_patho<-variants_patho[,c("patient","chr","pos","Locus","read_depth","zygosity",'reference','alternative')]
-  variants_control<-variants_control[,c("patient","chr","pos","Locus","read_depth","zygosity",'reference','alternative')]
-  
-  uniqueid<-paste(dbvariants$Locus,dbvariants$reference,dbvariants$alternative,sep=":")
-  dbvariants<-cbind(dbvariants,uniqueid)
-  uniqueid<-unique(uniqueid)
-  i.keep<-match(uniqueid,dbvariants$uniqueid)
-  dbvariants<-dbvariants[i.keep,]
-  
-  
-  system.time({
-    con <- dbConnect(RSQLite::SQLite(), "groupsToComparePartial.db")
-    dbWriteTable(con,"patho",variants_patho,overwrite=T)
-    dbWriteTable(con,"control",variants_control,overwrite=T)
-    dbWriteTable(con,"dbvariants",dbvariants,overwrite=T)
-    dbDisconnect(con)
-  })
+  dbDisconnect(variantsdb)
+  dbDisconnect(sequencingdb)
   
 }
 
