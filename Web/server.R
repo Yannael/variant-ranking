@@ -1,9 +1,10 @@
 library(shiny)
-requireNamespace('htmlwidgets')
+#requireNamespace('htmlwidgets')
 library(DT)
 library(d3heatmap)
 library(plyr)
 library(ggplot2)
+library(queryBuildR)
 
 shinyServer(function(input, output,session) {
   sessionvalues <- reactiveValues()
@@ -30,6 +31,37 @@ shinyServer(function(input, output,session) {
              genomes1000=phenotypes1000Gen,
              phenotypesAll[which(phenotypesAll[,'Sample ID'] %in% getSampleIDFromGroup(selectedSampleGroup)),]
       )
+  })
+ 
+  
+  output$sqlquery<-renderText({
+    #sessionData$sqlQuery<-input$queryBuilder_sqlQuery
+    paste(input$sqlQuery)
+  })
+  
+  output$queryBuilder<-renderQueryBuildR({
+    data<-as.data.frame(sessionvalues$phenotypes)
+    
+    #rules=list(condition="AND",rules=list(list(id= 'datasource',
+    #                                           operator= 'equal',
+    #                                           value= "ULB")))
+    rules=NULL
+    
+    filters<-list()
+    
+    for (colname in colnames(data)) {
+      filters<-c(filters,list(list(
+        id= tolower(gsub(" ","",colname)),
+        label= colname,
+        type= 'string',
+        input= 'select',
+        values=c(
+          setdiff(levels(data[,colname]),"")),
+        operators=list('equal', 'not_equal', 'is_null', 'is_not_null')))
+      )
+    }
+    
+    queryBuildR(rules,filters)
   })
   
   output$phenotypesTable<-DT::renderDataTable({
