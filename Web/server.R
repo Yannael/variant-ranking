@@ -9,6 +9,7 @@ library(queryBuildR)
 shinyServer(function(input, output,session) {
   sessionvalues <- reactiveValues()
   sessionvalues$phenotypes<-phenotypesAll
+  sessionvalues$variants<-variants
   
   #sessionvalues$currentResults<-results['Trios_Compound_Heterozygous'][[1]][[1]]
   
@@ -32,11 +33,16 @@ shinyServer(function(input, output,session) {
              phenotypesAll[which(phenotypesAll[,'Sample ID'] %in% getSampleIDFromGroup(selectedSampleGroup)),]
       )
   })
- 
+  
   
   output$sqlquery<-renderText({
     #sessionData$sqlQuery<-input$queryBuilder_sqlQuery
     paste(input$sqlQuery)
+  })
+  
+  output$sqlQueryVariants<-renderText({
+    #sessionData$sqlQuery<-input$queryBuilder_sqlQuery
+    paste(input$sqlQueryVariantsValue)
   })
   
   output$queryBuilder<-renderQueryBuildR({
@@ -59,6 +65,39 @@ shinyServer(function(input, output,session) {
           setdiff(levels(data[,colname]),"")),
         operators=list('equal', 'not_equal', 'is_null', 'is_not_null')))
       )
+    }
+    
+    queryBuildR(rules,filters)
+  })
+  
+  output$queryBuilderVariants<-renderQueryBuildR({
+    data<-as.data.frame(sessionvalues$variants)[,2:6]
+    
+    rules<-NULL
+    
+    filters<-list()
+    
+    for (colname in colnames(data)) {
+      
+      filterCol<-
+        switch(class(data[,colname]),
+               character=list(
+                 id= tolower(gsub(" ","",colname)),
+                 label= colname,
+                 type= 'string',
+                 operators=list('contains', 'is_null', 'is_not_null')),
+               integer=list(
+                 id= tolower(gsub(" ","",colname)),
+                 label= colname,
+                 type= 'integer',
+                 operators=list('less', 'equal', 'greater')),
+               numeric=list(
+                 id= tolower(gsub(" ","",colname)),
+                 label= colname,
+                 type= 'integer',
+                 operators=list('less', 'equal', 'greater'))
+        )
+      filters<-c(filters,list(filterCol))
     }
     
     queryBuildR(rules,filters)
@@ -194,7 +233,7 @@ shinyServer(function(input, output,session) {
       p
     }
   })
-
+  
   
   output$resultsMetadata<-renderUI({
     fluidRow(
