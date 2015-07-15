@@ -31,22 +31,36 @@ fieldsVariantsInfo<-c("chr","pos","reference","alternative",
                       "pph2_hvar_score", "pph2_hvar_pred", "sift_score", "sift_pred", "short_tandem_repeat")
 
 
+dummy<-function() {
+  
+  connectFile<-"../connectHighlander.R"
+  tablename<-"exomes_ug"
+  variantDBfile<-"variants.db"
+  sequencingDBfile<-"sequencing.db"
+  
+  connectFile<-"../connectHighlander2.R"
+  tablename<-"1000g"
+  variantDBfile<-"variants1000g.db"
+  sequencingDBfile<-"sequencing1000g.db"
+  
+}
+
 createCopyHighlanderDB<-function() {
   
-  source("../connectHighlander.R")
+  source(connectFile)
   
-  variantsdb <- dbConnect(RSQLite::SQLite(), "variants.db")
-  sequencingdb <- dbConnect(RSQLite::SQLite(), "sequencing.db")
+  variantsdb <- dbConnect(RSQLite::SQLite(), variantDBfile)
+  sequencingdb <- dbConnect(RSQLite::SQLite(), sequencingDBfile)
   
-  rs<-dbGetQuery(highlanderdb,"select distinct patient from exomes_ug")[,1]
+  samples<-dbGetQuery(highlanderdb,paste0("select distinct patient from ",tablename))[,1]
   
   fields_select<-paste(c(fieldsSequencingInfo,fieldsVariantsInfo),collapse=",")
   
-  for (sample in samples[58:64]) {
+  for (sample in samples[21:31]) {
     
     print(paste0("Processing sample ",sample))
     
-    sql<-paste0("select ",fields_select," from exomes_ug where 
+    sql<-paste0("select ",fields_select," from ",tablename," where 
                 patient='", sample,"'")
     
     data <- dbGetQuery(highlanderdb,sql)
@@ -68,7 +82,8 @@ createCopyHighlanderDB<-function() {
     
     variantsInfo<-cbind(ID=uniqueID,data[,fieldsVariantsInfo])
     
-    if (length(unique(uniqueID))<length(uniqueID)) stop(paste0("Sample ",sample," has duplicate variant unique ID"))
+    #if (length(unique(uniqueID))<length(uniqueID)) stop(paste0("Sample ",sample," has duplicate variant unique ID"))
+    variantsInfo<-unique(variantsInfo)
     
     if (length(dbListTables(variantsdb))==0) {
       dbWriteTable(variantsdb,"variants",variantsInfo)
@@ -91,5 +106,14 @@ createCopyHighlanderDB<-function() {
   
 }
 
+dummy<-function() {
+  
+  variantsdb <- dbConnect(RSQLite::SQLite(), variantDBfile)
+  sequencingdb <- dbConnect(RSQLite::SQLite(), sequencingDBfile)
+  
+  samples<-dbListTables(sequencingdb)
+  write.table(file="samples.txt",samples,col=F,row=T,quote=F)
+  
+}
 
 
