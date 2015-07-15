@@ -69,6 +69,23 @@ shinyUI(fluidPage(
                         
                       )
              ),
+             tabPanel("Filters", 
+                      tags$div(class="extraspace2"),
+                      fluidRow(
+                        column(8,
+                               queryBuildROutput("queryBuilderVariants",width="600px",height="100%"),
+                               textOutput("sqlQueryVariants"),
+                               actionButton("variantsQuery", label = "Apply filters"),
+                               tags$script('
+                                      document.getElementById("variantsQuery").onclick = function() {
+                                      var sqlQueryVariants = $("#queryBuilderVariants").queryBuilder("getSQL", "question_mark");
+                                      Shiny.onInputChange("sqlQueryVariantsValue", sqlQueryVariants);
+                                      };
+                                 ')
+                        )
+                      ),
+                      tags$div(class="extraspace1")
+             ),
              tabPanel("Ranking engine", 
                       tags$div(class="extraspace2"),
                       fluidRow(
