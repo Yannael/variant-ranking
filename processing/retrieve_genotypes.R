@@ -76,7 +76,7 @@ createCopyHighlanderDB<-function() {
                           allelic_depth_alt=data$allelic_depth_alt)
     
     sample<-gsub('-','',sample)
-    dbWriteTable(sequencingdb,sample,as.data.frame(sequencingInfo),overwrite=T)
+    dbWriteTable(sequencingdb,sample,as.data.frame(sequencingInfo),overwrite=T,row.names=F)
     
     print(paste0(nrow(sequencingInfo)," variant entries"))
     
@@ -86,7 +86,7 @@ createCopyHighlanderDB<-function() {
     variantsInfo<-unique(variantsInfo)
     
     if (length(dbListTables(variantsdb))==0) {
-      dbWriteTable(variantsdb,"variants",variantsInfo)
+      dbWriteTable(variantsdb,"variants",variantsInfo,row.names=F)
     }
     else {
       idInDB<-dbGetQuery(variantsdb,"select distinct ID from variants")[,1]
@@ -94,7 +94,7 @@ createCopyHighlanderDB<-function() {
       if (length(toKeep)>0) {
         toKeepIndex<-which(variantsInfo$ID %in% toKeep)
         print(paste0(length(toKeepIndex)," variant entries added to variants DB"))
-        dbWriteTable(variantsdb,"variants",variantsInfo[toKeepIndex,],append=T)
+        dbWriteTable(variantsdb,"variants",variantsInfo[toKeepIndex,],append=T,row.names=F)
       }
     }
     

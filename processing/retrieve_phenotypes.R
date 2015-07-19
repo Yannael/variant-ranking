@@ -47,7 +47,12 @@ getPhenoData<-function() {
   phenotypes1000Gen<-getPheno1000Genome()
   phenotypesULB<-getPhenoHighlander()
   
-  save(file="Web/phenotypes.Rdata",phenotypesULB,phenotypes1000Gen)
+  phenotypes<-rbind(phenotypesULB,phenotypes1000Gen)
+  
+  phenotypesdb <- dbConnect(RSQLite::SQLite(), "phenotypes.db")
+  colnames(phenotypes)<-c("data_source","sample_id","pathology","gender","super_population","population")
+  dbWriteTable(phenotypesdb,"phenotypes",phenotypes,overwrite=T,row.names=F)
+  dbDisconnect(phenotypesdb)
   
 }
 
