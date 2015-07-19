@@ -1,122 +1,120 @@
 library(shiny)
-#requireNamespace('htmlwidgets')
 library(DT)
-library(d3heatmap)
 library(plyr)
 library(ggplot2)
 library(queryBuildR)
+library(shinyBS)
 
 shinyServer(function(input, output,session) {
   sessionvalues <- reactiveValues()
-  sessionvalues$phenotypes<-phenotypesAll
+  sessionvalues$phenotypes<-loadPhenotypes("")
   sessionvalues$variants<-variants
+  sessionvalues$groups<-loadGroups()
   
-  #sessionvalues$currentResults<-results['Trios_Compound_Heterozygous'][[1]][[1]]
+  ####################################################
+  #Sample group manager
+  ####################################################
   
-  getSampleIDFromGroup<-function(groupName) {
-    index.group<-which(mySampleGroups[[1]]==paste0(groupName))
-    mySampleGroups[[2]][[index.group]]
-  }
-  
-  observe({
-    sessionvalues$currentResults<-results[input$selectedResultGroup][[1]][[1]]
+  output$selectGroup<-renderUI({
+    selectInput('selectedSampleGroup', 'Select sample group', 
+                choices = list("Groups"=sessionvalues$groups$group), 
+                selected=sessionvalues$groups$group[1],
+                selectize = FALSE)
   })
   
   observe({
-    selectedSampleGroup<-input$selectedSampleGroup
-    #browser()
-    sessionvalues$phenotypes<-
-      switch(selectedSampleGroup,
-             all=phenotypesAll,
-             erasme=phenotypesErasme,
-             genomes1000=phenotypes1000Gen,
-             phenotypesAll[which(phenotypesAll[,'Sample ID'] %in% getSampleIDFromGroup(selectedSampleGroup)),]
-      )
+    if (length(input$selectedSampleGroup)>0) {
+      selectedSampleGroupIndex<-which(sessionvalues$groups$group==input$selectedSampleGroup)
+      if (length(selectedSampleGroupIndex)==0) selectedSampleGroupIndex<-1
+      sql<-sessionvalues$groups[selectedSampleGroupIndex,2]
+      session$sendCustomMessage(type='callbackHandlerSelectGroup', sql)
+      sessionvalues$phenotypes<-loadPhenotypes(sql)
+    }
   })
   
-  
-  output$sqlquery<-renderText({
-    #sessionData$sqlQuery<-input$queryBuilder_sqlQuery
-    paste(input$sqlQuery)
+  observe({
+    if (length(input$deleteConfirmYesButtonGroup)>0 & input$deleteConfirmYesButtonGroup) {
+      isolate({
+      sessionvalues$groups<-sessionvalues$groups[-which(sessionvalues$groups$group==input$selectedSampleGroup),]
+      groupsdb<-dbConnect(RSQLite::SQLite(), "../groups.db")
+      dbWriteTable(groupsdb,"groups",sessionvalues$groups,overwrite=T,row.names=F)
+      dbDisconnect(groupsdb)
+      toggleModal(session, "deleteConfirmGroup", toggle = "close")
+      })
+      sessionvalues$groups<-loadGroups()
+    }
   })
   
-  output$sqlQueryVariants<-renderText({
-    #sessionData$sqlQuery<-input$queryBuilder_sqlQuery
-    paste(input$sqlQueryVariantsValue)
+  observe({
+    if (length(input$sqlQuerySamplesValue))
+      sessionvalues$phenotypes<-loadPhenotypes(input$sqlQuerySamplesValue)
   })
   
-  output$queryBuilder<-renderQueryBuildR({
-    data<-as.data.frame(sessionvalues$phenotypes)
-    
-    #rules=list(condition="AND",rules=list(list(id= 'datasource',
-    #                                           operator= 'equal',
-    #                                           value= "ULB")))
+  observe({
+    input$samplesQuerySave2
+    isolate({
+      if ((length(input$sampleGoupNameSave)>0) & length(input$sqlQuerySamplesValue)>0) {
+        groupsdb<-dbConnect(RSQLite::SQLite(), "../groups.db")
+        data<-data.frame(input$sampleGoupNameSave,input$sqlQuerySamplesValue)
+        colnames(data)<-c("group","sql")
+        dbWriteTable(groupsdb,"groups",data,append=T)
+        dbDisconnect(groupsdb)
+        toggleModal(session, "modalSamplesQuerySave", toggle = "close")
+        sessionvalues$groups<-loadGroups()
+      }
+    })
+  })
+  
+  output$queryBuilderSamples<-renderQueryBuildR({
+    data<-sessionvalues$phenotypes
+    filters<-getFiltersFromTable(data)
     rules=NULL
-    
-    filters<-list()
-    
-    for (colname in colnames(data)) {
-      filters<-c(filters,list(list(
-        id= tolower(gsub(" ","",colname)),
-        label= colname,
-        type= 'string',
-        input= 'select',
-        values=c(
-          setdiff(levels(data[,colname]),"")),
-        operators=list('equal', 'not_equal', 'is_null', 'is_not_null')))
-      )
-    }
-    
     queryBuildR(rules,filters)
   })
   
-  output$queryBuilderVariants<-renderQueryBuildR({
-    data<-as.data.frame(sessionvalues$variants)[,2:6]
-    
-    rules<-NULL
-    
-    filters<-list()
-    
-    for (colname in colnames(data)) {
-      
-      filterCol<-
-        switch(class(data[,colname]),
-               character=list(
-                 id= tolower(gsub(" ","",colname)),
-                 label= colname,
-                 type= 'string',
-                 operators=list('contains', 'is_null', 'is_not_null')),
-               integer=list(
-                 id= tolower(gsub(" ","",colname)),
-                 label= colname,
-                 type= 'integer',
-                 operators=list('less', 'equal', 'greater')),
-               numeric=list(
-                 id= tolower(gsub(" ","",colname)),
-                 label= colname,
-                 type= 'integer',
-                 operators=list('less', 'equal', 'greater'))
-        )
-      filters<-c(filters,list(filterCol))
-    }
-    
-    queryBuildR(rules,filters)
+  output$showVarPhenotypeUI<-renderUI({
+    selectInput('showVarPhenotype', 'Display variables', colnames(sessionvalues$phenotypes), 
+                selected=colnames(sessionvalues$phenotypes),multiple=TRUE, selectize=TRUE)
   })
   
   output$phenotypesTable<-DT::renderDataTable({
-    data<-as.data.frame(sessionvalues$phenotypes[,input$showVarPhenotype])
-    #data},
-    datatable(
-      data,escape= -1, rownames=F
-      ,filter='top', 
-      options = list(
-        dom='fltip', 
-        lengthMenu = list(c(10, 25, -1), c('10', '25','All')),pageLength = 10,
-        autoWidth = T,columnDefs = list(list(sClass="alignRight",aTargets="_all"))
-      )
-    )
-  }
-  )
+    data<-sessionvalues$phenotypes[,input$showVarPhenotype]
+    getWidgetTable(data,session)
+  })
+  
+  ####################################################
+  #Variant filtering
+  ####################################################
+  
+  output$sqlQueryVariants<-renderText({
+    paste(input$sqlQueryVariantsValue)
+  })
+  
+  observe({
+    input$variantsQueryLoad
+    sqlQuery<-"chr LIKE('%dr%') AND pos < 1"
+    session$sendCustomMessage(type='myCallbackHandler', sqlQuery)
+  })
+  
+  output$queryBuilderVariants<-renderQueryBuildR({
+    data<-as.data.frame(sessionvalues$variants)[,-1]
+    
+    rules<-NULL
+    
+    filters<-getFiltersFromTable(data)
+    
+    queryBuildR(rules,filters)
+  })
+  
+  output$variantsTable<-DT::renderDataTable({
+    data<-as.data.frame(sessionvalues$variants)[,2:7]
+    getWidgetTable(data,session)
+  })
+  
+  ####################################################
+  #Results explorer
+  ####################################################
+  
   
   output$resultsTable<-DT::renderDataTable({
     data<-sessionvalues$currentResults$scoreSummary

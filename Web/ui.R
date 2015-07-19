@@ -1,21 +1,18 @@
 library(shiny)
 library(DT)
 library(queryBuildR)
+library(shinyBS)
 
 shinyUI(fluidPage(
   includeCSS('www/style.css'),
   includeCSS('www/query-builder.default.min.css'),
-  #includeCSS('www/bootstrap.min.css'),
-  #tags$head(tags$script(src="bootstrap.min.js")),
-  #tags$head(tags$script(src="jquery.min.js")),
-  #tags$head(tags$script(src="query-builder.js")),
   tags$head(tags$script(src="query-builder.standalone.js")),
+  tags$head(tags$script(src="sql-parser.js")),
   fluidRow(
-           img(src="mgbck.jpg", height = 150, width = 1000)
-           #headerPanel("Gene & Variant Ranking Toolbox")
-    ),
- tags$div(class="extraspace2"),
- fluidRow(
+    img(src="mgbck.jpg", height = 150, width = 1000)
+  ),
+  tags$div(class="extraspace2"),
+  fluidRow(
     column(12,
            tabsetPanel(
              #tabPanel("Home", 
@@ -27,61 +24,72 @@ shinyUI(fluidPage(
              tabPanel("Sample group manager", 
                       tags$div(class="extraspace2"),
                       fluidRow(
-                        column(3,
-                               selectInput('selectedSampleGroup', 'Select sample group', choices = list(
-                                 "General sample groups" = c('ALL' = 'all', "Erasme" = 'erasme', "1000 genomes"="genomes1000"),
-                                 "Saved sample groups" = mySampleGroups[[1]]
-                               ), selectize = FALSE)
-                        )
-                      ),
-                      fluidRow(
-                        column(7,
-                               queryBuildROutput("queryBuilder",width="600px",height="100%"),
-                               textOutput("sqlquery"),
-                               actionButton("samplesQuery", label = "Apply filters"),
+                        column(10,offset=1,
+                               uiOutput("selectGroup"),
+                               queryBuildROutput("queryBuilderSamples",width="800px",height="100%"),
+                               actionButton("samplesQueryApply", label = "Apply filters"),
                                tags$script('
-                                      document.getElementById("samplesQuery").onclick = function() {
-                                      var sqlQuery = $("#queryBuilder").queryBuilder("getSQL", "question_mark");
-
-                                      Shiny.onInputChange("sqlQuery", sqlQuery);
+                                      function sqlQuerySamplesFunction() {
+                                      var sqlQuerySamples = $("#queryBuilderSamples").queryBuilder("getSQL", false);
+                                      Shiny.onInputChange("sqlQuerySamplesValue", sqlQuerySamples);
                                       };
-                                 ')
+                                      document.getElementById("samplesQueryApply").onclick = function() {sqlQuerySamplesFunction()}
+                                      document.getElementById("samplesQuerySave").onclick = function() {sqlQuerySamplesFunction()}
+                                 '),
+                               tags$script('            
+                                      Shiny.addCustomMessageHandler("callbackHandlerSelectGroup",  function(sqlQuery) {
+alert(sqlQuery)
+                                           if (sqlQuery=="") $("#queryBuilderSamples").queryBuilder("reset")
+                                           else $("#queryBuilderSamples").queryBuilder("setRulesFromSQL",sqlQuery);
+                                      });
+                                '),
+                               actionButton("samplesQuerySave", label = "Save group"),
+                               bsModal("modalSamplesQuerySave", "Save group", "samplesQuerySave", 
+                                       size = "small",
+                                       textInput("sampleGoupNameSave", "Save group as :", value = ""),
+                                       actionButton("samplesQuerySave2", label = "Save")
+                               ),
+                               actionButton("deleteButtonGroup", label = "Delete group"),
+                               bsModal("deleteConfirmGroup", "Are you sure?", "deleteButtonGroup", 
+                                       size = "small",
+                                       actionButton("deleteConfirmYesButtonGroup", label="Yes")
+                               )
+                               
                         )
                       ),
                       hr(),
                       fluidRow(
                         column(3,
-                               checkboxGroupInput('showVarPhenotype', 'Display fields:',
-                                                  names(phenotypesAll), selected = c("Data source","Sample ID","Pathology", "Control","Gender","Super population")),
-                               hr(),
-                               textInput("sampleGroupNameSave", label = "Save current sample group as:", 
-                                         value = ""),
-                               actionButton("saveFile", label = "Save current sample group")
+                               uiOutput("showVarPhenotypeUI")
                         ),
                         column(9,
-                               div(
-                                 DT::dataTableOutput('phenotypesTable'),
-                                 tags$style(type="text/css", '.shiny-datatable-output tfoot {display:table-header-group;}')
-                                 , style = 'width:690px;'),
+                               DT::dataTableOutput('phenotypesTable'),
                                tags$div(class="extraspace1")
-                               
                         )
-                        
                       )
              ),
              tabPanel("Filters", 
                       tags$div(class="extraspace2"),
                       fluidRow(
-                        column(8,
-                               queryBuildROutput("queryBuilderVariants",width="600px",height="100%"),
+                        column(10,offset=1,
+                               queryBuildROutput("queryBuilderVariants",width="800px",height="100%"),
                                textOutput("sqlQueryVariants"),
-                               actionButton("variantsQuery", label = "Apply filters"),
+                               actionButton("variantsQueryCheck", label = "Apply filters"),
                                tags$script('
-                                      document.getElementById("variantsQuery").onclick = function() {
-                                      var sqlQueryVariants = $("#queryBuilderVariants").queryBuilder("getSQL", "question_mark");
+                                      document.getElementById("variantsQueryCheck").onclick = function() {
+                                      var sqlQueryVariants = $("#queryBuilderVariants").queryBuilder("getSQL", false);
                                       Shiny.onInputChange("sqlQueryVariantsValue", sqlQueryVariants);
                                       };
-                                 ')
+                                 '),
+                               actionButton("variantsQueryLoad", label = "Load filter"),
+                               tags$script('            
+                                       Shiny.addCustomMessageHandler("myCallbackHandler",     
+                                            function(sqlQuery) {
+                                      $("#queryBuilderVariants").queryBuilder("setRulesFromSQL",sqlQuery);
+                                             });
+                                '),
+                               hr(),
+                               DT::dataTableOutput('variantsTable')
                         )
                       ),
                       tags$div(class="extraspace1")
@@ -117,11 +125,11 @@ shinyUI(fluidPage(
                                            ), 
                                            selectize = FALSE),
                                checkboxGroupInput("rankingCriterion", "Ranking criterion",
-                                            c("Univariate entropy" = "entropy",
-                                              "Univariate student p-value" = "pvalue",
-                                              "Minimum Redundancy Maximum Relevance" = "mrmr"
-                                            ),
-                                            selected=c("entropy","pvalue"))
+                                                  c("Univariate entropy" = "entropy",
+                                                    "Univariate student p-value" = "pvalue",
+                                                    "Minimum Redundancy Maximum Relevance" = "mrmr"
+                                                  ),
+                                                  selected=c("entropy","pvalue"))
                         ),
                         column(3,
                                h3("3) Results collection"),
@@ -137,7 +145,7 @@ shinyUI(fluidPage(
                                hr(),
                                div(actionButton("NULL","Start analysis"),align="center"),
                                tags$div(class="extraspace1")
-                               )
+                        )
                       )
              ),
              tabPanel("Results explorer", 
@@ -152,15 +160,15 @@ shinyUI(fluidPage(
                       hr(),
                       fluidRow(
                         column(12,
-                      uiOutput("resultsPanel"),
-                      tags$div(class="extraspace1")
+                               uiOutput("resultsPanel"),
+                               tags$div(class="extraspace1")
                         )
-                      
+                        
                       )
              )
            )
     )
- )
+  )
   
 ))
 
