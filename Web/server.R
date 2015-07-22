@@ -7,8 +7,8 @@ library(shinyBS)
 
 shinyServer(function(input, output,session) {
   sessionvalues <- reactiveValues()
-  sessionvalues$phenotypes<-loadPhenotypes("")
-  sessionvalues$variants<-variants
+  sessionvalues$phenotypes<-loadData("phenotypes","")
+  sessionvalues$variants<-loadData("variants","")
   sessionvalues$groups<-loadGroups()
   
   ####################################################
@@ -28,18 +28,18 @@ shinyServer(function(input, output,session) {
       if (length(selectedSampleGroupIndex)==0) selectedSampleGroupIndex<-1
       sql<-sessionvalues$groups[selectedSampleGroupIndex,2]
       session$sendCustomMessage(type='callbackHandlerSelectGroup', sql)
-      sessionvalues$phenotypes<-loadPhenotypes(sql)
+      sessionvalues$phenotypes<-loadData("phenotypes",sql)
     }
   })
   
   observe({
     if (length(input$deleteConfirmYesButtonGroup)>0 & input$deleteConfirmYesButtonGroup) {
       isolate({
-      sessionvalues$groups<-sessionvalues$groups[-which(sessionvalues$groups$group==input$selectedSampleGroup),]
-      groupsdb<-dbConnect(RSQLite::SQLite(), "../groups.db")
-      dbWriteTable(groupsdb,"groups",sessionvalues$groups,overwrite=T,row.names=F)
-      dbDisconnect(groupsdb)
-      toggleModal(session, "deleteConfirmGroup", toggle = "close")
+        sessionvalues$groups<-sessionvalues$groups[-which(sessionvalues$groups$group==input$selectedSampleGroup),]
+        groupsdb<-dbConnect(RSQLite::SQLite(), "../groups.db")
+        dbWriteTable(groupsdb,"groups",sessionvalues$groups,overwrite=T,row.names=F)
+        dbDisconnect(groupsdb)
+        toggleModal(session, "deleteConfirmGroup", toggle = "close")
       })
       sessionvalues$groups<-loadGroups()
     }
@@ -47,7 +47,7 @@ shinyServer(function(input, output,session) {
   
   observe({
     if (length(input$sqlQuerySamplesValue))
-      sessionvalues$phenotypes<-loadPhenotypes(input$sqlQuerySamplesValue)
+      sessionvalues$phenotypes<-loadData("phenotypes",input$sqlQuerySamplesValue)
   })
   
   observe({
@@ -78,8 +78,10 @@ shinyServer(function(input, output,session) {
   })
   
   output$phenotypesTable<-DT::renderDataTable({
-    data<-sessionvalues$phenotypes[,input$showVarPhenotype]
-    getWidgetTable(data,session)
+    if (length(input$showVarPhenotype)>0) {
+      data<-sessionvalues$phenotypes[,input$showVarPhenotype]
+      getWidgetTable(data,session)
+    }
   })
   
   ####################################################
