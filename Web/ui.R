@@ -5,9 +5,8 @@ library(shinyBS)
 
 shinyUI(fluidPage(
   includeCSS('www/style.css'),
-  includeCSS('www/query-builder.default.min.css'),
-  tags$head(tags$script(src="query-builder.standalone.js")),
-  tags$head(tags$script(src="sql-parser.js")),
+  #bootstrapPage(),
+  #includeCSS('www/bootstrap.min.css'),
   fluidRow(
     img(src="mgbck.jpg", height = 150, width = 1000)
   ),
@@ -102,13 +101,13 @@ alert(sqlQuery)
                                selectInput('selectedSampleGroup1', 'Control sample group', selected="1000genomes_EUR",
                                            choices = list(
                                              "General sample groups" = c('ALL' = 'all', "Erasme" = 'erasme', "1000 genomes"="1000genomes"),
-                                             "Saved sample groups" = mySampleGroups[[1]]
+                                             "Saved sample groups" = ""
                                            ), 
                                            selectize = FALSE),
                                selectInput('selectedSampleGroup2', 'Pathological sample group',selected="Erasme_Hydrocephalus",
                                            choices = list(
                                              "General sample groups" = c('ALL' = 'all', "Erasme" = 'erasme', "1000 genomes"="1000genomes"),
-                                             "Saved sample groups" = mySampleGroups[[1]]
+                                             "Saved sample groups" = ""
                                            ), 
                                            selectize = FALSE)
                         ),
