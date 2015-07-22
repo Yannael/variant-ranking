@@ -125,7 +125,7 @@ getWidgetTable<-function(data,session) {
             #filter = 'top',
             escape=T,
             options = list(
-              dom= 'tiS',
+              dom= 'itS',
               deferRender = TRUE,
               scrollY = 335,
               ajax = list(url = action),
@@ -160,23 +160,19 @@ names(results)<-c("Trios_De_Novo","Trios_Compound_Heterozygous","Trios_Digenic")
 
 dbDisconnect(con)
 
-variantsdb <- dbConnect(RSQLite::SQLite(), "../variants.db")
-variants<-dbReadTable(variantsdb,"variants")
-dbDisconnect(variantsdb)
+loadData<-function(db,sql) {
+  if (sql!="") sql<-paste0("where ",sql)
+  condb<-dbConnect(RSQLite::SQLite(), paste0("../",db,".db"))
+  data<-dbGetQuery(condb,paste0("select * from ",db," ",sql," limit 1000"))
+  dbDisconnect(condb)
+  data
+}
 
 loadGroups<-function() {
 groupsdb<-dbConnect(RSQLite::SQLite(), "../groups.db")
 groups<-dbReadTable(groupsdb,"groups")
 dbDisconnect(groupsdb)
 groups
-}
-
-loadPhenotypes<-function(sql) {
-  if (sql!="") sql<-paste0("where ",sql)
-  phenotypesdb<-dbConnect(RSQLite::SQLite(), "../phenotypes.db")
-  phenotypes<-dbGetQuery(phenotypesdb,paste0("select * from phenotypes ",sql))
-  dbDisconnect(phenotypesdb)
-  phenotypes
 }
 
 
