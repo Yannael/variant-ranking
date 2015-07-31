@@ -32,12 +32,15 @@ fieldsVariantsInfo<-c("chr","pos","reference","alternative",
 
 
 dummy<-function() {
+  #To which DB to connect
   
+  #Regular Highlander
   connectFile<-"../connectHighlander.R"
   tablename<-"exomes_ug"
   variantDBfile<-"variants.db"
   sequencingDBfile<-"sequencing.db"
   
+  #Highlander 1000 genomes
   connectFile<-"../connectHighlander2.R"
   tablename<-"1000g"
   variantDBfile<-"variants1000g.db"
@@ -56,7 +59,7 @@ createCopyHighlanderDB<-function() {
   
   fields_select<-paste(c(fieldsSequencingInfo,fieldsVariantsInfo),collapse=",")
   
-  for (sample in samples[21:31]) {
+  for (sample in samples) {
     
     print(paste0("Processing sample ",sample))
     
@@ -65,6 +68,7 @@ createCopyHighlanderDB<-function() {
     
     data <- dbGetQuery(highlanderdb,sql)
     
+    #Unique ID of a variant is chr:pos:ref:alt
     uniqueID<-paste(data$chr, data$pos, data$reference, data$alternative, sep=":")
     
     zygosity<-data$zygosity
@@ -75,6 +79,7 @@ createCopyHighlanderDB<-function() {
                           allelic_depth_ref=data$allelic_depth_ref,
                           allelic_depth_alt=data$allelic_depth_alt)
     
+    #Remove dashes from sample names (cannot be used for a DB table name)
     sample<-gsub('-','',sample)
     dbWriteTable(sequencingdb,sample,as.data.frame(sequencingInfo),overwrite=T,row.names=F)
     
