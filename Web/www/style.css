@@ -64,6 +64,10 @@ textarea {
   height:75px;
 }
 
+.extraspace3{
+  width:-75px;
+}
+
 .extraspace2{
   height:20px;
 }
