@@ -7,6 +7,19 @@ username<-'yleborgn'
 
 load("myResults.Rdata")
 
+idToName <- function(x) {
+  s <- strsplit(x, "_")[[1]]
+  paste(s, sep="", collapse=" ")
+}
+
+#' @export
+#'
+nameToId <- function(x) {
+  s <- strsplit(x, " ")[[1]]
+  paste(s, sep="", collapse="_")
+}
+
+
 get4<-function(l) {l[[4]]}
 get1<-function(l) {l[[1]]}
 get2<-function(l) {l[[2]]}
@@ -30,7 +43,7 @@ procRes<-function(results) {
   if (results[[2]]=="singleVariant") {
     scoreSummary1<-cbind(scoreSummary1,Score=res$infovariants1[,'gene_symbol'])
   }
-
+  
   scoreSummary2<-NULL
   if (results[[2]]=="pairVariantsMonogenic") {
     uniqueid2<-apply(res$locus[5:7,],2,paste,collapse=":")
@@ -58,29 +71,26 @@ procRes<-function(results) {
 getWidgetTable<-function(data,session) {
   action <- dataTableAjax(session, data,rownames=F)
   widget<-datatable(data, 
-            extensions = 'Scroller',
-            server = TRUE, 
-            selection = 'single',
-            rownames=F,
-            #filter = 'top',
-            escape=T,
-            options = list(
-              dom= 'itS',
-              deferRender = TRUE,
-              scrollY = 335,
-              ajax = list(url = action),
-              columnDefs = list(
-                list(
-                  targets = c("_all"),
-                  render = JS(
-                    "function(data, type, row, meta) {",
-                    "return type === 'display' && data.length > 15 ?",
-                    "'<span title=\"' + data + '\">' + data.substr(0, 11) + '...</span>' : data;",
-                    "}")
-                ),
-                list(className="dt-right",targets="_all")
-              )
-            )
+                    server = TRUE, 
+                    selection = 'none',
+                    rownames=F,
+                    escape=T,
+                    options = list(
+                      ajax = list(url = action),
+                      dom= 'C<"clear">lipt',
+                      lengthMenu = list(c(10, 100, 1000), c('10', '100','1000')),pageLength = 10,
+                      columnDefs = list(
+                        list(
+                          targets = c("_all"),
+                          render = JS(
+                            "function(data, type, row, meta) {",
+                            "return type === 'display' && data.length > 12 ?",
+                            "'<span title=\"' + data + '\">' + data.substr(0, 11) + '...</span>' : data;",
+                            "}")
+                        ),
+                        list(className="dt-right",targets="_all")
+                      )
+                    )
   )
   widget
 }
@@ -101,18 +111,17 @@ names(results)<-c("Trios_De_Novo","Trios_Compound_Heterozygous","Trios_Digenic")
 dbDisconnect(con)
 
 loadData<-function(db,sql) {
-  if (sql!="") sql<-paste0("where ",sql)
+  
+  if (sql!="") {
+    sql<-paste0("where ",sql)
+    sql<-gsub(',',"','",sql)
+  }
   condb<-dbConnect(RSQLite::SQLite(), paste0("../",db,".db"))
-  data<-dbGetQuery(condb,paste0("select * from ",db," ",sql," limit 1000"))
+  data<-dbGetQuery(condb,paste0("select * from ",db," ",sql," limit 100000"))
+  #data[is.na(data)]<-''
   dbDisconnect(condb)
   data
 }
 
-loadGroups<-function() {
-groupsdb<-dbConnect(RSQLite::SQLite(), "../groups.db")
-groups<-dbReadTable(groupsdb,"groups")
-dbDisconnect(groupsdb)
-groups
-}
-
+load("../filtersVariantsTypes.Rdata")
 

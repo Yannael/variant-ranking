@@ -20,11 +20,11 @@ shinyUI(fluidPage(
              #          "Create groups using the Create group panel"
              #        )
              #),
-             tabPanel("Sample group manager", 
+             tabPanel("Sample set manager", 
                       tags$div(class="extraspace2"),
                       fluidRow(
                         column(10,offset=1,
-                               uiOutput("selectGroup"),
+                               uiOutput("selectSampleGroupUI"),
                                queryBuildROutput("queryBuilderSamples",width="800px",height="100%"),
                                actionButton("samplesQueryApply", label = "Apply filters"),
                                tags$script('
@@ -36,8 +36,7 @@ shinyUI(fluidPage(
                                       document.getElementById("samplesQuerySave").onclick = function() {sqlQuerySamplesFunction()}
                                  '),
                                tags$script('            
-                                      Shiny.addCustomMessageHandler("callbackHandlerSelectGroup",  function(sqlQuery) {
-alert(sqlQuery)
+                                      Shiny.addCustomMessageHandler("callbackHandlerSelectSampleGroup",  function(sqlQuery) {
                                            if (sqlQuery=="") $("#queryBuilderSamples").queryBuilder("reset")
                                            else $("#queryBuilderSamples").queryBuilder("setRulesFromSQL",sqlQuery);
                                       });
@@ -48,10 +47,10 @@ alert(sqlQuery)
                                        textInput("sampleGoupNameSave", "Save group as :", value = ""),
                                        actionButton("samplesQuerySave2", label = "Save")
                                ),
-                               actionButton("deleteButtonGroup", label = "Delete group"),
-                               bsModal("deleteConfirmGroup", "Are you sure?", "deleteButtonGroup", 
+                               actionButton("deleteButtonSampleGroup", label = "Delete group"),
+                               bsModal("deleteConfirmSampleGroup", "Are you sure?", "deleteButtonSampleGroup", 
                                        size = "small",
-                                       actionButton("deleteConfirmYesButtonGroup", label="Yes")
+                                       actionButton("deleteConfirmYesButtonSampleGroup", label="Yes")
                                )
                                
                         )
@@ -67,31 +66,51 @@ alert(sqlQuery)
                         )
                       )
              ),
-             tabPanel("Filters", 
+             tabPanel("Variant set manager", 
                       tags$div(class="extraspace2"),
                       fluidRow(
                         column(10,offset=1,
+                               uiOutput("selectVariantGroupUI"),
                                queryBuildROutput("queryBuilderVariants",width="800px",height="100%"),
-                               textOutput("sqlQueryVariants"),
-                               actionButton("variantsQueryCheck", label = "Apply filters"),
+                               actionButton("variantsQueryApply", label = "Apply filters"),
                                tags$script('
-                                      document.getElementById("variantsQueryCheck").onclick = function() {
+                                      function sqlQueryVariantsFunction() {
                                       var sqlQueryVariants = $("#queryBuilderVariants").queryBuilder("getSQL", false);
                                       Shiny.onInputChange("sqlQueryVariantsValue", sqlQueryVariants);
                                       };
+                                      document.getElementById("variantsQueryApply").onclick = function() {sqlQueryVariantsFunction()}
+                                      document.getElementById("variantsQuerySave").onclick = function() {sqlQueryVariantsFunction()}
                                  '),
-                               actionButton("variantsQueryLoad", label = "Load filter"),
                                tags$script('            
-                                       Shiny.addCustomMessageHandler("myCallbackHandler",     
-                                            function(sqlQuery) {
-                                      $("#queryBuilderVariants").queryBuilder("setRulesFromSQL",sqlQuery);
-                                             });
+                                      Shiny.addCustomMessageHandler("callbackHandlerSelectVariantGroup",  function(sqlQuery) {
+                                           if (sqlQuery=="") $("#queryBuilderVariants").queryBuilder("reset")
+                                           else $("#queryBuilderVariants").queryBuilder("setRulesFromSQL",sqlQuery);
+                                      });
                                 '),
-                               hr(),
-                               DT::dataTableOutput('variantsTable')
+                               actionButton("variantsQuerySave", label = "Save group"),
+                               bsModal("modalVariantsQuerySave", "Save group", "variantsQuerySave", 
+                                       size = "small",
+                                       textInput("variantGoupNameSave", "Save group as :", value = ""),
+                                       actionButton("variantsQuerySave2", label = "Save")
+                               ),
+                               actionButton("deleteButtonVariantGroup", label = "Delete group"),
+                               bsModal("deleteConfirmVariantGroup", "Are you sure?", "deleteButtonVariantGroup", 
+                                       size = "small",
+                                       actionButton("deleteConfirmYesButtonVariantGroup", label="Yes")
+                               )
                         )
                       ),
-                      tags$div(class="extraspace1")
+                      hr(),
+                      fluidRow(
+                        column(3,
+                               uiOutput("showVarVariantsUI")
+                        ),
+                        column(9,
+                               DT::dataTableOutput('variantsTable'),
+                               tags$div(class="extraspace1")
+                        )
+                      )#,
+                      #tags$div(class="extraspace1")
              ),
              tabPanel("Ranking engine", 
                       tags$div(class="extraspace2"),

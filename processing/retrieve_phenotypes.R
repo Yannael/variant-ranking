@@ -50,7 +50,7 @@ getPhenoData<-function() {
   phenotypes<-rbind(phenotypesULB,phenotypes1000Gen)
   
   phenotypesdb <- dbConnect(RSQLite::SQLite(), "phenotypes.db")
-  colnames(phenotypes)<-c("data_source","sample_id","pathology","gender","super_population","population")
+  colnames(phenotypes)<-c("Data_Source","Sample_ID","Pathology","Gender","Super_Population","Population")
   dbWriteTable(phenotypesdb,"phenotypes",phenotypes,overwrite=T,row.names=F)
   dbDisconnect(phenotypesdb)
   

@@ -9,39 +9,40 @@ shinyServer(function(input, output,session) {
   sessionvalues <- reactiveValues()
   sessionvalues$phenotypes<-loadData("phenotypes","")
   sessionvalues$variants<-loadData("variants","")
-  sessionvalues$groups<-loadGroups()
+  sessionvalues$samplesSets<-loadData("samplesSets","")
+  sessionvalues$variantsSets<-loadData("variantsSets","")
   
   ####################################################
   #Sample group manager
   ####################################################
   
-  output$selectGroup<-renderUI({
-    selectInput('selectedSampleGroup', 'Select sample group', 
-                choices = list("Groups"=sessionvalues$groups$group), 
-                selected=sessionvalues$groups$group[1],
+  output$selectSampleGroupUI<-renderUI({
+    selectInput('selectedSampleGroup', 'Select sample set', 
+                choices = list("Groups"=sessionvalues$samplesSets$group), 
+                selected=sessionvalues$samplesSets$group[1],
                 selectize = FALSE)
   })
   
   observe({
     if (length(input$selectedSampleGroup)>0) {
-      selectedSampleGroupIndex<-which(sessionvalues$groups$group==input$selectedSampleGroup)
+      selectedSampleGroupIndex<-which(sessionvalues$samplesSets$group==input$selectedSampleGroup)
       if (length(selectedSampleGroupIndex)==0) selectedSampleGroupIndex<-1
-      sql<-sessionvalues$groups[selectedSampleGroupIndex,2]
-      session$sendCustomMessage(type='callbackHandlerSelectGroup', sql)
+      sql<-sessionvalues$samplesSets[selectedSampleGroupIndex,2]
+      session$sendCustomMessage(type='callbackHandlerSelectSampleGroup', sql)
       sessionvalues$phenotypes<-loadData("phenotypes",sql)
     }
   })
   
   observe({
-    if (length(input$deleteConfirmYesButtonGroup)>0 & input$deleteConfirmYesButtonGroup) {
+    if (length(input$deleteConfirmYesButtonSampleGroup)>0 & input$deleteConfirmYesButtonSampleGroup) {
       isolate({
-        sessionvalues$groups<-sessionvalues$groups[-which(sessionvalues$groups$group==input$selectedSampleGroup),]
-        groupsdb<-dbConnect(RSQLite::SQLite(), "../groups.db")
-        dbWriteTable(groupsdb,"groups",sessionvalues$groups,overwrite=T,row.names=F)
+        sessionvalues$samplesSets<-sessionvalues$samplesSets[-which(sessionvalues$samplesSets$group==input$selectedSampleGroup),]
+        groupsdb<-dbConnect(RSQLite::SQLite(), "../samplesSets.db")
+        dbWriteTable(groupsdb,"samplesSets",sessionvalues$samplesSets,overwrite=T,row.names=F)
         dbDisconnect(groupsdb)
-        toggleModal(session, "deleteConfirmGroup", toggle = "close")
+        toggleModal(session, "deleteConfirmSampleGroup", toggle = "close")
       })
-      sessionvalues$groups<-loadGroups()
+      sessionvalues$samplesSets<-loadData("samplesSets","")
     }
   })
   
@@ -54,32 +55,41 @@ shinyServer(function(input, output,session) {
     input$samplesQuerySave2
     isolate({
       if ((length(input$sampleGoupNameSave)>0) & length(input$sqlQuerySamplesValue)>0) {
-        groupsdb<-dbConnect(RSQLite::SQLite(), "../groups.db")
+        groupsdb<-dbConnect(RSQLite::SQLite(), "../samplesSets.db")
         data<-data.frame(input$sampleGoupNameSave,input$sqlQuerySamplesValue)
         colnames(data)<-c("group","sql")
-        dbWriteTable(groupsdb,"groups",data,append=T)
+        dbWriteTable(groupsdb,"samplesSets",data,append=T)
         dbDisconnect(groupsdb)
         toggleModal(session, "modalSamplesQuerySave", toggle = "close")
-        sessionvalues$groups<-loadGroups()
+        sessionvalues$samplesSets<-loadData("samplesSets","")
       }
     })
   })
   
   output$queryBuilderSamples<-renderQueryBuildR({
     data<-sessionvalues$phenotypes
+    data[,1]<-as.factor(data[,1])
+    data[,3]<-as.factor(data[,3])
+    data[,4]<-as.factor(data[,4])
+    data[,5]<-as.factor(data[,5])
+    data[,6]<-as.factor(data[,6])
     filters<-getFiltersFromTable(data)
     rules=NULL
     queryBuildR(rules,filters)
   })
   
   output$showVarPhenotypeUI<-renderUI({
-    selectInput('showVarPhenotype', 'Display variables', colnames(sessionvalues$phenotypes), 
-                selected=colnames(sessionvalues$phenotypes),multiple=TRUE, selectize=TRUE)
+    isolate({
+      niceNames<-as.vector(sapply(colnames(sessionvalues$phenotypes),idToName))
+      selectInput('showVarPhenotype', 'Display variables (max. 6)', niceNames, 
+                  selected=niceNames[1:5],multiple=TRUE, selectize=TRUE)
+    })
   })
   
   output$phenotypesTable<-DT::renderDataTable({
     if (length(input$showVarPhenotype)>0) {
-      data<-sessionvalues$phenotypes[,input$showVarPhenotype]
+      data<-sessionvalues$phenotypes[,sapply(input$showVarPhenotype,nameToId)]
+      colnames(data)<-input$showVarPhenotype
       getWidgetTable(data,session)
     }
   })
@@ -88,29 +98,64 @@ shinyServer(function(input, output,session) {
   #Variant filtering
   ####################################################
   
-  output$sqlQueryVariants<-renderText({
-    paste(input$sqlQueryVariantsValue)
+  output$selectVariantGroupUI<-renderUI({
+    #browser()
+    selectInput('selectedVariantGroup', 'Select variant set', 
+                choices = list("Groups"=c(sessionvalues$variantsSets$group)), 
+                selected=sessionvalues$variantsSets$group[1],
+                selectize = FALSE)
   })
   
   observe({
-    input$variantsQueryLoad
-    sqlQuery<-"chr LIKE('%dr%') AND pos < 1"
-    session$sendCustomMessage(type='myCallbackHandler', sqlQuery)
+    if (length(input$selectedVariantGroup)>0) {
+      selectedVariantGroupIndex<-which(sessionvalues$variantsSets$group==input$selectedVariantGroup)
+      if (length(selectedVariantGroupIndex)==0) selectedVariantGroupIndex<-1
+      sql<-sessionvalues$variantsSets[selectedVariantGroupIndex,2]
+      session$sendCustomMessage(type='callbackHandlerSelectVariantGroup', sql)
+      sessionvalues$variants<-loadData("variants",sql)
+    }
+  })
+  
+  observe({
+    if (length(input$sqlQueryVariantsValue))
+      sessionvalues$variants<-loadData("variants",input$sqlQueryVariantsValue)
+  })
+  
+  observe({
+    input$variantsQuerySave2
+    isolate({
+      if ((length(input$variantGoupNameSave)>0) & length(input$sqlQueryVariantsValue)>0) {
+        groupsdb<-dbConnect(RSQLite::SQLite(), "../variantsSets.db")
+        data<-data.frame(input$variantGoupNameSave,input$sqlQueryVariantsValue)
+        colnames(data)<-c("group","sql")
+        dbWriteTable(groupsdb,"variantsSets",data,append=T)
+        dbDisconnect(groupsdb)
+        sessionvalues$variantsSets<-loadData("variantsSets","")
+        toggleModal(session, "modalVariantsQuerySave", toggle = "close")
+      }
+    })
   })
   
   output$queryBuilderVariants<-renderQueryBuildR({
     data<-as.data.frame(sessionvalues$variants)[,-1]
-    
     rules<-NULL
-    
-    filters<-getFiltersFromTable(data)
-    
-    queryBuildR(rules,filters)
+    queryBuildR(rules,filtersVariantsTypes)
   })
   
+  output$showVarVariantsUI<-renderUI({
+    isolate({
+      niceNames<-as.vector(sapply(colnames(sessionvalues$variants),idToName))
+    selectizeInput('showVarVariants', 'Display variables (max. 6)', niceNames[2:ncol(sessionvalues$variants)], 
+                selected=niceNames[2:6],multiple=TRUE, options = list(maxItems = 6))
+    })
+  })
+
   output$variantsTable<-DT::renderDataTable({
-    data<-as.data.frame(sessionvalues$variants)[,2:7]
+    if (length(input$showVarVariants)>0) {
+    data<-as.data.frame(sessionvalues$variants)[,sapply(input$showVarVariants,nameToId)]
+    colnames(data)<-input$showVarVariants
     getWidgetTable(data,session)
+    }
   })
   
   ####################################################
