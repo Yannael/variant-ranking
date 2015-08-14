@@ -54,6 +54,15 @@ getPhenoData<-function() {
   dbWriteTable(phenotypesdb,"phenotypes",phenotypes,overwrite=T,row.names=F)
   dbDisconnect(phenotypesdb)
   
+  data<-phenotypes
+  data[,1]<-as.factor(data[,1])
+  data[,3]<-as.factor(data[,3])
+  data[,4]<-as.factor(data[,4])
+  data[,5]<-as.factor(data[,5])
+  data[,6]<-as.factor(data[,6])
+  filtersPhenotypesTypes<-getFiltersFromTable(data)
+  save(file="filtersPhenotypesTypes.Rdata",filtersPhenotypesTypes)
+  
 }
 
 createPhenoGroups<-function() {

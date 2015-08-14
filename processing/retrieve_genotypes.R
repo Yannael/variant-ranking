@@ -21,43 +21,23 @@ geneIDs<-c("TUBB2A","TCL1A")
 #genotype_quality>70 and
 #snpeff_effect<>'SYNONYMOUS_CODING' and 
 
-
-fieldsSequencingInfo<-c("patient","chr","pos","reference","alternative","zygosity","read_depth","allelic_depth_ref","allelic_depth_alt","genotype_quality",
-                        "filters","downsampled","mapping_quality_zero_reads")
-
-fieldsSequencingInfoNewNames<-c("Zygosity","Read_Depth","Allelic_Depth_Ref","Allelic_Depth_Alt","Genotype_Quality",
-                                ,"Filters","Downsampled","Mapping_Quality_Zero_Reads")
-
-fieldsVariantsInfo<-c("chr","pos","reference","alternative",
-                      "change_type", "gene_symbol", "gene_ensembl", "num_genes","clinvar_rs", 
-                      "consensus_MAF","consensus_MAC", "dbsnp_id_137",
-                      "snpeff_effect", "snpeff_impact",
-                      "cadd_phred","cadd_raw","vest_score","pph2_hdiv_score", "pph2_hdiv_pred", 
-                      "pph2_hvar_score", "pph2_hvar_pred", "sift_score", "sift_pred", "short_tandem_repeat")
-
-fieldsVariantsInfoNewNames<-c("Chr","Position","Reference","Alternative",
-                              "Change_Type", "Gene_Symbol", "Gene_Ensembl", "Num_Genes","Clinvar_RS", 
-                              "Consensus_MAF","Consensus_MAC", "dbsnp_id_137",
-                              "Snpeff_Effect", "Snpeff_Impact",
-                              "CADD_Phred","CADD_Raw","VEST_Score","PPH2_hdiv_score", "PPH2_hdiv_pred", 
-                              "PPH2_hvar_score", "PPH2_hvar_pred", "SIFT_Score", "SIFT_Pred", "Short_Tandem_Repeat")
-
 fieldsInfo<-c("patient","chr","pos","reference","alternative","zygosity","read_depth","allelic_depth_ref","allelic_depth_alt","genotype_quality",
-              "filters","downsampled","mapping_quality_zero_reads",
-                      "change_type", "gene_symbol", "gene_ensembl", "num_genes","clinvar_rs", 
-                      "consensus_MAF","consensus_MAC", "dbsnp_id_137",
-                      "snpeff_effect", "snpeff_impact",
-                      "cadd_phred","cadd_raw","vest_score","pph2_hdiv_score", "pph2_hdiv_pred", 
-                      "pph2_hvar_score", "pph2_hvar_pred", "sift_score", "sift_pred", "short_tandem_repeat")
+              "filters","downsampled","mapping_quality_zero_reads","allele_num",
+              "change_type", "gene_symbol", "gene_ensembl", "transcript_ensembl","num_genes","clinvar_rs", 
+              "consensus_MAF","consensus_MAC", "dbsnp_id_137",
+              "snpeff_effect", "snpeff_impact",
+              "cadd_phred","cadd_raw","vest_score","pph2_hdiv_score", "pph2_hdiv_pred", 
+              "pph2_hvar_score", "pph2_hvar_pred", "sift_score", "sift_pred", "short_tandem_repeat")
 
-fieldsInfoNewNames<-c("Patient","Chr","Position","Reference","Alternative",
+fieldsInfoNewNames<-c("Sample_ID","Chr","Position","Reference","Alternative",
                       "Zygosity","Read_Depth","Allelic_Depth_Ref","Allelic_Depth_Alt","Genotype_Quality"
-                      ,"Filters","Downsampled","Mapping_Quality_Zero_Reads",
-                              "Change_Type", "Gene_Symbol", "Gene_Ensembl", "Num_Genes","Clinvar_RS", 
-                              "Consensus_MAF","Consensus_MAC", "dbsnp_id_137",
-                              "Snpeff_Effect", "Snpeff_Impact",
-                              "CADD_Phred","CADD_Raw","VEST_Score","PPH2_hdiv_score", "PPH2_hdiv_pred", 
-                              "PPH2_hvar_score", "PPH2_hvar_pred", "SIFT_Score", "SIFT_Pred", "Short_Tandem_Repeat")
+                      ,"Filters","Downsampled","Mapping_Quality_Zero_Reads","Allele_Num",
+                      "Change_Type", "Gene_Symbol", "Gene_Ensembl","Transcript_Ensembl", "Num_Genes","Clinvar_RS", 
+                      "Consensus_MAF","Consensus_MAC", "dbsnp_id_137",
+                      "Snpeff_Effect", "Snpeff_Impact",
+                      "CADD_Phred","CADD_Raw","VEST_Score","PPH2_hdiv_score", "PPH2_hdiv_pred", 
+                      "PPH2_hvar_score", "PPH2_hvar_pred", "SIFT_Score", "SIFT_Pred", "Short_Tandem_Repeat")
+
 
 
 dummy<-function() {
@@ -66,7 +46,7 @@ dummy<-function() {
   #Regular Highlander
   connectFile<-"../connectHighlander.R"
   tablename<-"exomes_ug"
-  variantDBfile<-"variantsULB.db"
+  variantDBfile<-"variants.db"
   sequencingDBfile<-"sequencingULB.db"
   
   #Highlander 1000 genomes
@@ -77,110 +57,30 @@ dummy<-function() {
   
 }
 
+createIndices<-function(dbname,tablename,cnames) {
+  for (cname in cnames) {
+    print(cname)
+    dbGetQuery(dbname,paste("create index ",cname," on ",tablename,"(",cname,")"))
+  }
+}
+
 createCopyHighlanderDB<-function() {
   
   source(connectFile)
   
-  variantsdb <- dbConnect(RSQLite::SQLite(), variantDBfile)
-  sequencingdb <- dbConnect(RSQLite::SQLite(), sequencingDBfile)
-  
   samples<-dbGetQuery(highlanderdb,paste0("select distinct patient from ",tablename))[,1]
+  fields_select<-paste(unique(c(fieldsInfo)),collapse=",")
   
-  fields_select<-paste(c(fieldsSequencingInfo,fieldsVariantsInfo),collapse=",")
+  #For 1000g
+  subsamples<-paste0("('",paste(samples[1:100],sep="",collapse="','"),"')")
+  system.time(data <- dbGetQuery(highlanderdb,paste0("select ",fields_select," from ",tablename," where patient in ",subsamples)))
   
-  for (sample in samples[1:5]) {
-    
-    print(paste0("Processing sample ",sample))
-    
-    sql<-paste0("select ",fields_select," from ",tablename," where 
-                patient='", sample,"'")
-    
-    data <- dbGetQuery(highlanderdb,sql)
-    
-    #Unique ID of a variant is chr:pos:ref:alt
-    uniqueID<-paste(data$chr, data$pos, data$reference, data$alternative, sep=":")
-    
-    zygosity<-data$zygosity
-    zygosity[zygosity=="Homozygous"]<-2
-    zygosity[zygosity=="Heterozygous"]<-1
-    
-    sequencingInfo<-cbind(sample=sample,ID=uniqueID,zygosity=zygosity,data[,fieldsSequencingInfo[-1]])
-    
-    #Remove dashes from sample names (cannot be used for a DB table name)
-    #sample<-gsub('-','',sample)
-    dbWriteTable(sequencingdb,"sequencing",sequencingInfo,append=T,row.names=F)
-    
-    print(paste0(nrow(sequencingInfo)," variant entries"))
-    
-    variantsInfo<-cbind(ID=uniqueID,data[,fieldsVariantsInfo])
-    
-    #if (length(unique(uniqueID))<length(uniqueID)) stop(paste0("Sample ",sample," has duplicate variant unique ID"))
-    variantsInfo<-unique(variantsInfo)
-    
-    if (length(dbListTables(variantsdb))==0) {
-      dbWriteTable(variantsdb,"variants",variantsInfo,row.names=F)
-    }
-    else {
-      idInDB<-dbGetQuery(variantsdb,"select distinct ID from variants")[,1]
-      toKeep<-setdiff(variantsInfo$ID,idInDB)
-      if (length(toKeep)>0) {
-        toKeepIndex<-which(variantsInfo$ID %in% toKeep)
-        print(paste0(length(toKeepIndex)," variant entries added to variants DB"))
-        dbWriteTable(variantsdb,"variants",variantsInfo[toKeepIndex,],append=T,row.names=F)
-      }
-    }
-    
-  }
-  
-  dbDisconnect(highlanderdb)
-  dbDisconnect(variantsdb)
-  dbDisconnect(sequencingdb)
-  
-}
-
-postprocessing<-function() {
-  variantDBfile<-"variants.db"
-  variantsdb <- dbConnect(RSQLite::SQLite(), variantDBfile)
-  data<-dbReadTable(variantsdb,"variants")
-  data[is.na(data)]<-''
-  colnames(data)<-c('ID',fieldsVariantsInfoNewNames)
-  data<-data[order(data[,2],data[,3]),]
-  dbWriteTable(variantsdb,"variants",data,overwrite=T,row.names=F)
-  
-  data[,'Chr']<-as.factor(data[,'Chr'])
-  data[,'Change_Type']<-as.factor(data[,'Change_Type'])
-  data[,'Snpeff_Effect']<-as.factor(data[,'Snpeff_Effect'])
-  data[,'Snpeff_Impact']<-as.factor(data[,'Snpeff_Impact'])
-  data[,'SIFT_Pred']<-as.factor(data[,'SIFT_Pred'])
-  data[,'PPH2_hvar_pred']<-as.factor(data[,'PPH2_hvar_pred'])
-  data[,'PPH2_hdiv_pred']<-as.factor(data[,'PPH2_hdiv_pred'])
-  
-  filtersVariantsTypes<-getFiltersFromTable(data[,-1])
-  save(file="filtersVariantsTypes.Rdata",filtersVariantsTypes)
-  
-  variantsdb <- dbConnect(RSQLite::SQLite(), variantDBfile)
-  sequencingdb <- dbConnect(RSQLite::SQLite(), sequencingDBfile)
-  
-  samples<-dbListTables(sequencingdb)
-  write.table(file="samples.txt",samples,col=F,row=T,quote=F)
-  
-}
-
-createCopyHighlanderDB2<-function() {
-  
-  source(connectFile)
-  
-  variantsdb <- dbConnect(RSQLite::SQLite(), variantDBfile)
-  sequencingdb <- dbConnect(RSQLite::SQLite(), sequencingDBfile)
-  
-  #samples<-dbGetQuery(highlanderdb,paste0("select distinct patient from ",tablename))[,1]
-  fields_select<-paste(unique(c(fieldsSequencingInfo,fieldsVariantsInfo)),collapse=",")
-  
+  #For ULB
   #Takes about 3 minutes
-  system.time(data <- dbGetQuery(highlanderdb,paste0("select ",fields_select," from ",tablename," limit 5000000")))
+  system.time(data <- dbGetQuery(highlanderdb,paste0("select ",fields_select," from ",tablename)))
   uniqueID<-paste(data$chr, data$pos, data$reference, data$alternative, sep=":")
   
-  id.redundant<-tapply(data$gene_symbol,uniqueID,length)
+  #id.redundant<-tapply(data$gene_symbol,uniqueID,length)
   
   zygosity<-data$zygosity
   zygosity[zygosity=="Homozygous"]<-2
@@ -190,9 +90,22 @@ createCopyHighlanderDB2<-function() {
   
   data[is.na(data)]<-''
   colnames(data)<-c('ID',fieldsInfoNewNames)
-  data<-data[order(data[,3],data[,4]),]
+  #data<-data[order(data[,3],data[,4]),]
   
-  data[,'Chr']<-as.factor(data[,'Chr'])
+  variantsdb <- dbConnect(RSQLite::SQLite(), variantDBfile)
+  dbWriteTable(variantsdb,"variants",data,overwrite=T,row.names=F)
+  
+  phenotypesdb<-dbConnect(RSQLite::SQLite(), paste0("phenotypes.db"))
+  phenotypes<-dbReadTable(phenotypesdb,"phenotypes")
+  dbWriteTable(variantsdb,"phenotypes",phenotypes,overwrite=T,row.names=F)
+  
+  #2 minutes with 15M entries
+  system.time(data<-dbGetQuery(variantsdb,paste0("select * from variants,phenotypes where variants.Sample_ID=phenotypes.Sample_ID")))
+  
+  #Remove duplicate Sample_ID column
+  data<-data[,-which(colnames(data)=="Sample_ID")[2]]
+  
+  data[,'Chr']<-as.factor(data[,'Chr'],levels=c(1:22,'X','Y'))
   data[,'Change_Type']<-as.factor(data[,'Change_Type'])
   data[,'Snpeff_Effect']<-as.factor(data[,'Snpeff_Effect'])
   data[,'Snpeff_Impact']<-as.factor(data[,'Snpeff_Impact'])
@@ -207,10 +120,39 @@ createCopyHighlanderDB2<-function() {
   data[,'PPH2_hdiv_score']<-as.numeric(data[,'PPH2_hdiv_score'])
   data[,'PPH2_hvar_score']<-as.numeric(data[,'PPH2_hvar_score'])
   data[,'SIFT_Score']<-as.numeric(data[,'SIFT_Score'])
+  data[,'Allelic_Depth_Ref']<-as.numeric(data[,'Allelic_Depth_Ref'])
+  data[,'Allelic_Depth_Alt']<-as.numeric(data[,'Allelic_Depth_Alt'])
+  data[,'Genotype_Quality']<-as.numeric(data[,'Genotype_Quality'])
+  data[,'Mapping_Quality_Zero_Reads']<-as.numeric(data[,'Mapping_Quality_Zero_Reads'])
+  data[,'Filters']<-as.factor(data[,'Filters'])
   
-  dbWriteTable(variantsdb,"variants",data,overwrite=T,row.names=F)
+  data[,'Data_Source']<-as.factor(data[,'Data_Source'])
+  data[,'Pathology']<-as.factor(data[,'Pathology'])
+  data[,'Gender']<-as.factor(data[,'Gender'])
+  data[,'Super_Population']<-as.factor(data[,'Super_Population'])
+  data[,'Population']<-as.factor(data[,'Population'])
   
-  filtersVariantsTypes<-getFiltersFromTable(data[,-1])
-  save(file="filtersVariantsTypes.Rdata",filtersVariantsTypes)
+  filtersTypes<-getFiltersFromTable(data[,-1])
+  save(file="filtersTypes.Rdata",filtersTypes)
+  
+  datadb<-dbConnect(RSQLite::SQLite(), paste0("data.db"))
+  dbWriteTable(datadb,"variants",data,row.names=F,overwrite=T)
+  dbDisconnect(datadb)
+  
+  missingGenes<-datawhich(data[,'Gene_Ensembl']=='')
+  ID<-data[missingGenes,'ID']
+  subData<-data[which(data[,'ID'] %in% ID),c('ID','Gene_Ensembl')]
+  tt<-tapply(subData[,1],subData[,1],length)
+  
+}
+
+countLevels<-function(vec) {
+  length(unique(vec))
+}
+
+dummy2<-function() {
+  
+  system.time(data<-dbGetQuery(data2db,paste0("select * from variants where Data_Source='1000 Genomes' limit 100000")))
+  system.time(data<-dbGetQuery(datadb,paste0("select count(*) from variants,phenotypes where variants.Sample_ID=phenotypes.Sample_ID")))
   
 }

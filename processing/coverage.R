@@ -2,161 +2,27 @@ require(RMySQL)
 require(reshape2)
 require(plyr)
 
-createCoverageDB<-function() {
+createGenotypeMatrix<-function() {
   
+  groupsdb <- dbConnect(RSQLite::SQLite(), "samplesSets.db")
   
-  con <- dbConnect(RSQLite::SQLite(), "coverage.db")
+  groups<-dbReadTable(groupsdb,"samplesSets")
   
-  #Add X
-  for (num in 16:22) {
-    if (num<10) add0<-"0" else add0<-""
-    
-    filename<-paste0("/home/yleborgn/bridge/data/erasme/coverage/ISDBMbatch_coverage_chr",add0,num,"_trios_seqCap")
-    
-    #Takes about 5 minutes
-    st<-system.time(CoverageTab<-read.table(filename,header=T))
-    print(st)
-    #30s
-    system.time({
-      dbWriteTable(con,paste0("chr",num),CoverageTab,overwrite=T)
-    })
-  }
-  for (num in c("X","Y")) {
-    add0<-""
-    
-    filename<-paste0("/home/yleborgn/bridge/data/erasme/coverage/ISDBMbatch_coverage_chr",add0,num,"_trios_seqCap")
-    
-    #Takes about 5 minutes
-    st<-system.time(CoverageTab<-read.table(filename,header=T))
-    print(st)
-    #30s
-    system.time({
-      dbWriteTable(con,paste0("chr",num),CoverageTab,overwrite=T)
-    })
-  }
+  controlQuery<-groups[which(groups$group=="ULBControlRareVariants"),]$sql
+  caseQuery<-groups[which(groups$group=="ULBNeuroDevRareVariants"),]$sql
   
-  dbDisconnect(con)
-  
-}
-
-
-countNA<-function(x) {length(which(is.na(x)))}
-
-retrieveRefEntriesChr<-function(chr,patho,control) {
-  
-  thresh<-10
-  
-  #1,5min
-  system.time({
-    rs<-dbSendQuery(concoverage,paste0("select * from locus,",chr," where locus.Locus=",chr,".Locus"))
-    coverage<-fetch(rs, n=-1)
-  })
-  
-  varMat<-coverage[,7:39]
-  ISDBMid<-as.vector(unlist(sapply(colnames(varMat),substr,11,21)))
-  mapping<-read.table('mappingZH_ISDBM.txt',stringsAsFactors=F)
-  i<-match(mapping[,2],ISDBMid)
-  colnames(varMat)[i]<-mapping[,1]
-  varMat<-varMat[,i]
-  
-  rownames(varMat)<-apply(coverage[,1:3],1,paste,collapse=":")
-  
-  varMat[varMat<thresh]<-NA
-  varMat[varMat>=thresh]<-0
-  
-  nb.NA<-apply(varMat,1,countNA)
-  i.remove<-which(nb.NA>0)
-  varMat<-varMat[-i.remove,]
-  
-  pathoVars<-paste(patho$Locus,patho$reference,patho$alternative,sep=":")
-  controlVars<-paste(control$Locus,control$reference,control$alternative,sep=":")
-  idRow<-rownames(varMat)
-  
-  select.entry.homozygous<-which((pathoVars %in% idRow) & (patho$zygosity=="Homozygous"))
-  for (i in select.entry.homozygous) 
-    varMat[pathoVars[i],patho$patient[i]]<-2
-  
-  select.entry.heterozygous<-which((pathoVars %in% idRow) & (patho$zygosity=="Heterozygous"))
-  for (i in select.entry.heterozygous) 
-    varMat[pathoVars[i],patho$patient[i]]<-1
-  
-  select.entry.homozygous<-which((controlVars %in% idRow) & (control$zygosity=="Homozygous"))
-  for (i in select.entry.homozygous) 
-    varMat[controlVars[i],control$patient[i]]<-2
-  
-  select.entry.heterozygous<-which((controlVars %in% idRow) & (control$zygosity=="Heterozygous"))
-  for (i in select.entry.heterozygous) 
-    varMat[controlVars[i],control$patient[i]]<-1
-  
-  varMat<-cbind(Locus=coverage[-i.remove,1],reference=coverage[-i.remove,2],alternative=coverage[-i.remove,3],varMat)
-  varMat
-}
-
-retrieveRefEntriesChr2<-function(patho,control) {
+  datadb <- dbConnect(RSQLite::SQLite(), "data.db")
+  system.time(control<-dbGetQuery(datadb,paste0("select Gene_Ensembl,ID,Sample_ID,Zygosity from variants where ",controlQuery)))
+  system.time(case<-dbGetQuery(datadb,paste0("select Gene_Ensembl,ID,Sample_ID,Zygosity from variants where ",caseQuery)))
+  dbDisconnect(datadb)
   
   patientID<-read.table('mappingZH_ISDBM_withFMC.txt',stringsAsFactors=F)[,1]
   
-  entries<-rbind(patho,control)
-  keyLocus<-entries[,c('Locus','reference','alternative')]
+  DF<-rbind(control,case)
+  genoMat<-dcast(DF,Gene_Ensembl+ID~Sample_ID,fill=0)
+  genoMat<-genoMat[,c(1,2,match(patientID,colnames(genoMat)))] 
   
-  idRow<-apply(keyLocus,1,paste0,collapse=":")
-  
-  DF<-cbind(idRow, entries[,c('patient','zygosity')])
-  
-  varMat<-dcast(DF,idRow~patient)
-  varMat[is.na(varMat)]<-"0"
-  varMat[varMat=="Heterozygous"]<-"1"
-  varMat[varMat=="Homozygous"]<-"2"
-  
-  idRow<-varMat[,'idRow']
-  locusData<-ldply(sapply(as.character(idRow),strsplit,":"))
-  locus<-apply(locusData[,c(2:3)],1,paste0,collapse=":")
-  rownames(varMat)<-locusData[,1]
-  varMat<-varMat[,-1]
-  
-  i.match<-match(patientID,colnames(varMat))
-  varMat<-varMat[,i.match] 
-  
-  varMat<-cbind(Locus=locus,reference=locusData[,4],alternative=locusData[,5],varMat)
-  varMat
-}
-
-retrieveRefEntries<-function() {
-  
-  #Move patho and control groups to coverage DB
-  congroups <- dbConnect(RSQLite::SQLite(), "groupsToComparePartial.db")
-  #concoverage<- dbConnect(RSQLite::SQLite(), "coverage.db")
-  
-  rs<-dbSendQuery(congroups,"select * from patho" )
-  patho<-fetch(rs, n=-1)
-  rs<-dbSendQuery(congroups,"select * from control" )
-  control<-fetch(rs, n=-1)
-  
-  #locusvariants<-data.frame(unique(patho[,c("Locus",'reference','alternative')]),stringsAsFactors=F)
-  #dbWriteTable(concoverage,"locus",locusvariants,overwrite=T)
-  
-  st<-system.time(varMat<-rbind(varMat,retrieveRefEntriesChr2(paste0("chr",chr),patho,control)))
-  
-  rs<-dbSendQuery(congroups,"select * from dbvariants" )
-  dbvariants<-fetch(rs, n=-1)
-  
-  mapping_gene<-match(varMat$Locus,dbvariants$Locus)
-  varMat<-cbind(geneid=dbvariants$gene_ensembl[mapping_gene],varMat)
-  varMat<-varMat[sort(as.character(varMat$Locus),index.return=T)$ix,]
-  
-  i.remove<-which(is.na(varMat[,1]))
-  if (length(i.remove)>0) varMat<-varMat[-i.remove,]
-  
-  i.keep<-which((dbvariants[,'consensus_MAF']<0.01|is.na(dbvariants[,'consensus_MAF']) | dbvariants[,'consensus_MAC']<1000|is.na(dbvariants[,'consensus_MAC'])) 
-                &(dbvariants[,'gene_symbol']!="NA")
-                &(dbvariants[,'snpeff_effect']!="INTRON")
-  )
-  id.keep<-dbvariants[i.keep,'uniqueid']
-  id.keep<-intersect(id.keep,rownames(varMat))
-  i.keep<-match(id.keep,rownames(varMat))
-  varMat<-varMat[i.keep,]
-  
-  write.table(file="varMat.txt",varMat,col.names=F,row.names=F,quote=F)
+  write.table(file="genoMat.txt",genoMat,col.names=F,row.names=F,quote=F)
   
 }
 
