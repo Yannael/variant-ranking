@@ -12,7 +12,9 @@ shinyServer(function(input, output,session) {
   sessionvalues$samplesSets<-loadSet("samplesSets","")
   sessionvalues$nbRowsExceededWarningMessage<-""
   sessionvalues$currentResults<-results[[1]][[1]]
- 
+  sessionvalues$analyses<-analyses
+  sessionvalues$analysesNames<-names(analyses)
+  
   ####################################################
   #Sample group manager
   ####################################################
@@ -87,13 +89,14 @@ shinyServer(function(input, output,session) {
     isolate({
       niceNames<-as.vector(sapply(colnames(sessionvalues$data),idToName))
       selectInput('showVarPhenotype', 'Select variables to display', niceNames, 
-                  selected=niceNames[c(1,36:37,39,2:7)],multiple=TRUE, selectize=TRUE,width='1050px')
+                  selected=niceNames[c(1,30:37,39,2:7)],multiple=TRUE, selectize=TRUE,width='1050px')
     })
   })
   
   output$phenotypesTable<-DT::renderDataTable({
     if (length(input$showVarPhenotype)>0) {
       data<-sessionvalues$data[,sapply(input$showVarPhenotype,nameToId)]
+      data[is.na(data)]<-''
       colnames(data)<-input$showVarPhenotype
       getWidgetTable(data,session)
     }
@@ -108,127 +111,108 @@ shinyServer(function(input, output,session) {
   })
   
   ####################################################
+  #Ranking engine
+  ####################################################
+  
+  output$selectSampleGroup1UI<-renderUI({
+    selectInput('selectSampleGroup1', 'Control group', 
+                choices = list("Groups"=sessionvalues$samplesSets$group), 
+                selected=sessionvalues$samplesSets$group[1],
+                selectize = FALSE)
+  })
+  
+  output$selectSampleGroup2UI<-renderUI({
+    selectInput('selectSampleGroup2', 'Case group', 
+                choices = list("Groups"=sessionvalues$samplesSets$group), 
+                selected=sessionvalues$samplesSets$group[1],
+                selectize = FALSE)
+  })
+  
+  observe({
+    input$startAnalysisButton
+    isolate({analysisName<-input$analysisName})
+    if (analysisName!='') {
+      #load("analyses.Rdata")
+      #browser()
+      analyses<-sessionvalues$analyses
+      analyses[[analysisName]]<-list()
+      
+      selectSampleGroupIndex1<-which(sessionvalues$samplesSets$group==input$selectSampleGroup1)
+      selectSampleGroupIndex2<-which(sessionvalues$samplesSets$group==input$selectSampleGroup2)
+      
+      analyses[[analysisName]]$group1<-sessionvalues$samplesSets[selectSampleGroupIndex1,]
+      analyses[[analysisName]]$group2<-sessionvalues$samplesSets[selectSampleGroupIndex2,]
+      
+      controlData<-loadData(sessionvalues$samplesSets[selectSampleGroupIndex1,'sql'],noLimit=T)[[1]]
+      caseData<-loadData(sessionvalues$samplesSets[selectSampleGroupIndex2,'sql'],noLimit=T)[[1]]
+      
+      variantData<-rbind(controlData,caseData)
+      variantData[is.na(variantData)]<-''
+      analyses[[analysisName]]$variantData<-variantData
+      save(file="../analyses.Rdata",analyses)
+      sessionvalues$analyses<-analyses
+      sessionvalues$analysesNames<-names(analyses)
+    }  
+  })
+  
+  
+  ####################################################
   #Results explorer
   ####################################################
   
-  
-  output$resultsTable<-DT::renderDataTable({
-    #browser()
-    data<-sessionvalues$currentResults$scoreSummary
-    if (!is.null(dim(data))) {
-      widget = datatable(data, 
-                         server = FALSE, 
-                         escape=F,
-                         selection = 'single',
-                         filter = 'top',
-                         rownames=T,
-                         options = list(
-                           dom= 'liptlpi',
-                           lengthMenu = list(c(10, 25, 100), c('10', '25','100')),pageLength = 10,
-                           autoWidth = F,
-                           columnDefs = list(
-                             list(className="dt-right",targets="_all")
-                           )
-                         )
-      )
-      widget
-    }
+  output$selectAnalysisUI<-renderUI({
+    
+    selectInput('selectAnalysis', 'Select analysis', choices = list(
+      "Available analyses" = sessionvalues$analysesNames
+    ), selected=sessionvalues$analysesNames[1],selectize = FALSE)
   })
   
+  output$resultsTable<-renderDataTable({
+    data<-sessionvalues$currentResults$scoreSummary
+#     if (!is.null(dim(data))) {
+#       widget = datatable(data, 
+#                          server = FALSE, 
+#                          escape=F,
+#                          selection = 'single',
+#                          filter = 'top',
+#                          rownames=T,
+#                          options = list(
+#                            dom= 'liptlpi',
+#                            lengthMenu = list(c(10, 25, 100), c('10', '25','100')),pageLength = 10,
+#                            autoWidth = F,
+#                            columnDefs = list(
+#                              list(className="dt-right",targets="_all")
+#                            )
+#                          )
+#       )
+#       widget
+#     }
+  },server=TRUE)
+
+  observe({
+    nameAnalysis<-input$selectAnalysis
+    if (length(input$resultsTable_rows_selected)) {
+      geneID<-sessionvalues$currentResults$scoreSummary[input$resultsTable_rows_selected,'Gene']
+      data<-sessionvalues$analyses[[nameAnalysis]]$variantData
+      sessionvalues$analyses[[nameAnalysis]]$variantDataGene<-data[which(data[,'Gene_Ensembl']==geneID),]
+    }
+  })
   
   output$variantsMetadataTable<-DT::renderDataTable({
-    if (length(input$resultsTable_rows_selected)>0) {
-      widget<-NULL
-      if (sessionvalues$currentResults$type=="singleVariant") {
-        infovariants<-sessionvalues$currentResults$infovariants[input$resultsTable_rows_selected,]
-        data<-cbind(names(infovariants),t(infovariants))
-        colnames(data)<-c("Variable","Value")
-      }
-      if (sessionvalues$currentResults$type=="pairVariantsMonogenic") {
-        infovariants1<-sessionvalues$currentResults$infovariants1[input$resultsTable_rows_selected,]
-        infovariants2<-sessionvalues$currentResults$infovariants2[input$resultsTable_rows_selected,]
-        data<-cbind(names(infovariants1),t(infovariants1),t(infovariants2))
-        colnames(data)<-c("Variable","Value1","Value2")
-      }
-      data[is.na(data)]<-"NA"
-      action = dataTableAjax(session, data,rownames=F)
-      if (!is.null(dim(data))) {
-        widget <- datatable(data, 
-                            server = TRUE, 
-                            selection = 'single',
-                            rownames=F,
-                            filter = 'bottom',
-                            escape=T,
-                            options = list(
-                              dom= 't',
-                              pageLength = 100,
-                              scrollY = 335,
-                              ajax = list(url = action),
-                              columnDefs = list(
-                                list(
-                                  targets = c(1),
-                                  render = JS(
-                                    "function(data, type, row, meta) {",
-                                    "return type === 'display' && data.length > 15 ?",
-                                    "'<span title=\"' + data + '\">' + data.substr(0, 11) + '...</span>' : data;",
-                                    "}")
-                                ),
-                                list(className="dt-right",targets="_all")
-                              )
-                            )
-        )
-      }
-      widget 
+    isolate({nameAnalysis<-input$selectAnalysis})
+    if (length(sessionvalues$analyses[[nameAnalysis]]$variantDataGene)>0) {
+      data<-sessionvalues$analyses[[nameAnalysis]]$variantDataGene
+      getWidgetTable(data,session)
     }
   })
   
-  getMatGenoTrio<-function(genotypes,namecols) {
-    genotypes<-factor(genotypes,levels=c("0","1","2","NA"))
-    genotypes<-mapvalues(genotypes,from=c(0,1,2,"NA"),to=c("Ref/Ref","Ref/Alt","Alt/Alt","NA"))
-    
-    DF<-data.frame(rep(paste(rep("Trio ",11),1:11,sep=""),each=3),rep(namecols,11),genotypes)
-    DF[,1]<-factor(DF[,1],levels=rev(unique(DF[,1])),ordered=T)
-    colnames(DF)<-c("Trios","FMC","Zygosity")
-    
-    DF
-  }
-  
-  output$heatMapGenotypes<-renderPlot({
-    if (length(input$resultsTable_rows_selected)>0) {
-      res<-NULL
-      DF<-NULL
-      genotypes<-sessionvalues$currentResults$genotypes[[input$resultsTable_rows_selected]]
-      if (sessionvalues$currentResults$type=="singleVariant") {
-        DF<-getMatGenoTrio(genotypes,c("Child","Father","Mother"))
-        aspect.ratio<-3
-      }
-      if (sessionvalues$currentResults$type=="pairVariantsMonogenic") {
-        DF1<-getMatGenoTrio(genotypes[1,],c("Child variant 1","Father variant 1","Mother variant 1"))
-        DF2<-getMatGenoTrio(genotypes[2,],c("Child variant 2","Father variant 2","Mother variant 2"))
-        DF<-rbind(DF1,DF2)
-        aspect.ratio<-1.7
-      }
-      
-      #DF[,1]<-factor(DF[,1],levels=rev(unique(DF[,1])),ordered=T)
-      DF[,2]<-factor(DF[,2],levels=sort(levels(DF[,2])),ordered=T)
-      
-      base_size=20
-      p<-ggplot(DF, aes(y=Trios,x=FMC))
-      p <- p + geom_tile(aes(fill=Zygosity),colour = "white")
-      p <- p +  theme_grey(base_size = base_size) + labs(x = "", y = "") + 
-        scale_x_discrete(expand = c(0, 0)) +
-        scale_y_discrete(expand = c(0, 0)) +
-        theme(aspect.ratio=aspect.ratio)+
-        theme(axis.title.x = element_blank(),
-              axis.text.x = element_text(size = base_size *  0.8, angle = 330,hjust = 0, colour = "grey50")) 
-      p<-p+ scale_fill_manual(breaks=c("Ref/Ref","Ref/Alt","Alt/Alt","NA"),
-                              values=c("#fff7bc","#fec44f","#d95f0e","000000"),
-                              #values=c("#ece7f2","#a6bddb","#2b8cbe","000000"),
-                              name="Zigosity")
-      p
+  output$variantsMetadataPivotTable<-renderRpivotTable({
+    isolate({nameAnalysis<-input$selectAnalysis})
+    if (length(sessionvalues$analyses[[nameAnalysis]]$variantDataGene)>0) {
+      data<-sessionvalues$analyses[[nameAnalysis]]$variantDataGene
+      rpivotTable(data)
     }
   })
-  
   
   output$resultsMetadata<-renderUI({
     fluidRow(
@@ -260,16 +244,14 @@ shinyServer(function(input, output,session) {
              hr(),
              h3("Result details"),
              fluidRow(
-               column(5,offset=1,
+               column(12,
                       fluidRow(
                         h4("Variant metadata"),
-                        DT::dataTableOutput('variantsMetadataTable')
-                      )
-               ),
-               column(5,offset=1,
+                        dataTableOutput('variantsMetadataTable')
+                      ),
                       fluidRow(
-                        h4("Genotypes trios"),
-                        plotOutput("heatMapGenotypes")
+                        h4("Pivot Table"),
+                        rpivotTableOutput('variantsMetadataPivotTable')
                       )
                )
              )

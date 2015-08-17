@@ -1,23 +1,12 @@
-require("rvest")
-require("magrittr")
+#require("rvest")
+#require("magrittr")
 require("RMySQL")
 require("jsonlite")
 require('rpivotTable')
 
 username<-'yleborgn'
 
-load("myResults.Rdata")
-
-idToName <- function(x) {
-  s <- strsplit(x, "_")[[1]]
-  paste(s, sep="", collapse=" ")
-}
-
-nameToId <- function(x) {
-  s <- strsplit(x, " ")[[1]]
-  paste(s, sep="", collapse="_")
-}
-
+#load("myResults.Rdata")
 
 get4<-function(l) {l[[4]]}
 get1<-function(l) {l[[1]]}
@@ -27,7 +16,7 @@ procRes<-function(results) {
   res<-list()
   res$name<-results[[1]]
   res$type<-results[[2]]
-  res$genotypes<-lapply(results[[3]],get4)
+  #res$genotypes<-lapply(results[[3]],get4)
   res$scores<-sapply(results[[3]],get2)
   
   res$locus<-sapply(results[[3]],get1)
@@ -36,33 +25,42 @@ procRes<-function(results) {
   #to.keep<-match(uniqueid1,dbvariants$uniqueid)
   #res$infovariants1<-dbvariants[to.keep,]
   
-  scoreSummary1<-cbind(res$locus[2,],res$locus[1,])
-  colnames(scoreSummary1)<-c("Locus","Gene")
-  
-  if (results[[2]]=="singleVariant") {
-    #scoreSummary1<-cbind(scoreSummary1,Score=res$infovariants1[,'gene_symbol'])
-  }
-  
-  scoreSummary2<-NULL
-  if (results[[2]]=="pairVariantsMonogenic") {
-    uniqueid2<-apply(res$locus[5:7,],2,paste,collapse=":")
-    to.keep<-match(uniqueid2,dbvariants$uniqueid)
-    res$infovariants2<-dbvariants[to.keep,]
+  if (res$type=="singleVariant") {
+    scoreSummary1<-cbind(res$locus[2,],res$locus[1,])
+    colnames(scoreSummary1)<-c("Locus","Gene")
     
-    scoreSummary2<-cbind(res$locus[5,],res$infovariants2[,'reference'],res$infovariants2[,'alternative'],res$infovariants1[,'gene_symbol'])
-    colnames(scoreSummary2)<-c("Locus2","Reference2", "Alternative2","Gene symbol")
-  }
-  
-  if (results[[2]]=="pairVariantsDigenic") {
-    uniqueid2<-apply(res$locus[6:8,],2,paste,collapse=":")
-    to.keep<-match(uniqueid2,dbvariants$uniqueid)
-    res$infovariants2<-dbvariants[to.keep,]
-    scoreSummary2<-cbind(res$infovariants1[,'gene_symbol'],res$locus[6,],res$infovariants2[,'reference'],res$infovariants2[,'alternative'],res$infovariants2[,'gene_symbol'])
-    colnames(scoreSummary2)<-c("Gene symbol1","Locus2","Reference2", "Alternative2","Gene symbol2")
+    if (results[[2]]=="singleVariant") {
+      #scoreSummary1<-cbind(scoreSummary1,Score=res$infovariants1[,'gene_symbol'])
+    }
     
+    scoreSummary2<-NULL
+    if (results[[2]]=="pairVariantsMonogenic") {
+      uniqueid2<-apply(res$locus[5:7,],2,paste,collapse=":")
+      to.keep<-match(uniqueid2,dbvariants$uniqueid)
+      res$infovariants2<-dbvariants[to.keep,]
+      
+      scoreSummary2<-cbind(res$locus[5,],res$infovariants2[,'reference'],res$infovariants2[,'alternative'],res$infovariants1[,'gene_symbol'])
+      colnames(scoreSummary2)<-c("Locus2","Reference2", "Alternative2","Gene symbol")
+    }
+    
+    if (results[[2]]=="pairVariantsDigenic") {
+      uniqueid2<-apply(res$locus[6:8,],2,paste,collapse=":")
+      to.keep<-match(uniqueid2,dbvariants$uniqueid)
+      res$infovariants2<-dbvariants[to.keep,]
+      scoreSummary2<-cbind(res$infovariants1[,'gene_symbol'],res$locus[6,],res$infovariants2[,'reference'],res$infovariants2[,'alternative'],res$infovariants2[,'gene_symbol'])
+      colnames(scoreSummary2)<-c("Gene symbol1","Locus2","Reference2", "Alternative2","Gene symbol2")
+      
+    }
+    
+    res$scoreSummary<-cbind(scoreSummary1,scoreSummary2,Score=res$scores)
   }
   
-  res$scoreSummary<-cbind(scoreSummary1,scoreSummary2,Score=res$scores)
+  if (res$type=="geneUnivariate") {
+    #browser()
+    scoreSummary1<-cbind(res$locus)
+    res$scoreSummary<-cbind(scoreSummary1,t(res$scores))
+    colnames(res$scoreSummary)<-c("Gene","Score","Score case","Score control")
+  }
   
   res
 }
@@ -70,13 +68,18 @@ procRes<-function(results) {
 getWidgetTable<-function(data,session) {
   action <- dataTableAjax(session, data,rownames=F)
   widget<-datatable(data, 
-                    server = TRUE, 
-                    selection = 'none',
+                    #server = TRUE, 
+                    extensions = c('Scroller','ColVis'),
                     rownames=F,
                     escape=T,
                     options = list(
                       ajax = list(url = action),
-                      dom= 'C<"clear">lipt',
+                      dom= 'C<"clear">litS',
+                      deferRender = TRUE,
+                      selection = 'none',
+                      scrollY = 350,
+                      scrollX=T,
+                      scrollCollapse = TRUE,
                       lengthMenu = list(c(10, 100, 1000), c('10', '100','1000')),pageLength = 10,
                       columnDefs = list(
                         list(
@@ -94,35 +97,40 @@ getWidgetTable<-function(data,session) {
   widget
 }
 
-con <- dbConnect(RSQLite::SQLite(), "../groupsToComparePartial.db")
-rs<-dbSendQuery(con,"select * from dbvariants" )
-dbvariants<-fetch(rs, n=-1)
+#con <- dbConnect(RSQLite::SQLite(), "../groupsToComparePartial.db")
+#rs<-dbSendQuery(con,"select * from dbvariants" )
+#dbvariants<-fetch(rs, n=-1)
 
 results<-fromJSON(txt="../singVarDeNovo.txt")
-results1<-list(procRes(results))
+results2<-list(procRes(results))
 #results<-fromJSON(txt="pairVarCompound.txt")
+results<-fromJSON(txt="../neuroDev_Control.txt")
+results1<-list(procRes(results))
 #results2<-list(procRes(results))
 #results<-fromJSON(txt="pairVarDigenic.txt")
 #results3<-list(procRes(results))
-results<-list(results1,results1,results1)
-names(results)<-c("Trios_De_Novo","Trios_Compound_Heterozygous","Trios_Digenic")
+results<-list(results1,results2,results1,results1)
+names(results)<-c("geneUnivariate","Trios_De_Novo","Trios_Compound_Heterozygous","Trios_Digenic")
 
-dbDisconnect(con)
+#dbDisconnect(con)
 
-loadData<-function(sql) {
+loadData<-function(sql,noLimit=F) {
   
   if (sql!="") {
     sql<-paste0(" where ",sql)
     sql<-gsub(',',"','",sql)
   }
   condb<-dbConnect(RSQLite::SQLite(), paste0("../data.db"))
-  nbrows<-dbGetQuery(condb,paste0("select count(*) from variants ",sql))
+  #nbrows<-dbGetQuery(condb,paste0("select count(*) from variants ",sql))
+  nbrows<-100000
+  if (noLimit) limit<-""
+  else limit<-" limit 100000"
   nbRowsExceededWarningMessage<-""
   if (nbrows>100000) {
     nbRowsExceededWarningMessage<-paste0("Query returns ",nbrows," records. First 100000 retrieved.")
   }
   
-  data<-dbGetQuery(condb,paste0("select * from variants ",sql," limit 100000"))
+  data<-dbGetQuery(condb,paste0("select * from variants ",sql,limit))
   dbDisconnect(condb)
   list(data=data[,-c(1)],nbRowsExceededWarningMessage=nbRowsExceededWarningMessage)
 }
@@ -141,4 +149,4 @@ loadSet<-function(db,sql) {
 
 load("../filtersTypes.Rdata")
 
-
+load("../analyses.Rdata")
