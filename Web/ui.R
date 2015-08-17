@@ -78,18 +78,8 @@ shinyUI(
                           fluidRow(
                             column(3,
                                    h3("1) Sample groups"),
-                                   selectInput('selectedSampleGroup1', 'Control sample group', selected="1000genomes_EUR",
-                                               choices = list(
-                                                 "General sample groups" = c('ALL' = 'all', "Erasme" = 'erasme', "1000 genomes"="1000genomes"),
-                                                 "Saved sample groups" = ""
-                                               ), 
-                                               selectize = FALSE),
-                                   selectInput('selectedSampleGroup2', 'Pathological sample group',selected="Erasme_Hydrocephalus",
-                                               choices = list(
-                                                 "General sample groups" = c('ALL' = 'all', "Erasme" = 'erasme', "1000 genomes"="1000genomes"),
-                                                 "Saved sample groups" = ""
-                                               ), 
-                                               selectize = FALSE)
+                                   uiOutput("selectSampleGroup1UI"),
+                                   uiOutput("selectSampleGroup2UI")
                             ),
                             column(4,offset=1,
                                    h3("2) Ranking parameters"),
@@ -112,7 +102,7 @@ shinyUI(
                             ),
                             column(3,
                                    h3("3) Results collection"),
-                                   textInput("resultName","Analysis name",""),
+                                   textInput("analysisName","Analysis name",""),
                                    radioButtons("email", "Mail notification",
                                                 c("Yes" = "yes",
                                                   "No" = "no"
@@ -122,7 +112,7 @@ shinyUI(
                           fluidRow(
                             column(12,
                                    hr(),
-                                   div(actionButton("NULL","Start analysis"),align="center"),
+                                   div(actionButton("startAnalysisButton","Start analysis"),align="center"),
                                    tags$div(class="extraspace1")
                             )
                           )
@@ -131,9 +121,7 @@ shinyUI(
                           tags$div(class="extraspace2"),
                           fluidRow(
                             column(3,
-                                   selectInput('selectedResultGroup', 'Select result ID', choices = list(
-                                     "Available results" = names(results)
-                                   ), selected="Trios_Compound_Heterozygous",selectize = FALSE)
+                                   uiOutput("selectAnalysisUI")
                             )
                           ),
                           hr(),
