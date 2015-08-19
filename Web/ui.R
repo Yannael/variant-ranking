@@ -9,7 +9,7 @@ shinyUI(
     includeCSS('www/style.css'),
     div(
       fluidRow(
-        img(src="mgbck.jpg", height = 150, width = 1000)
+        img(src="mgbck2.jpg", height = 150, width = 1000)
       ),
       tags$div(class="extraspace2"),
       fluidRow(
@@ -21,13 +21,13 @@ shinyUI(
                  #          "Create groups using the Create group panel"
                  #        )
                  #),
-                 tabPanel("Gene & variant group manager", 
+                 tabPanel("Gene & variant filtering manager", 
                           tags$div(class="extraspace2"),
                           fluidRow(
                             column(12,
                                    uiOutput("selectSampleGroupUI"),
                                    queryBuildROutput("queryBuilderSamples",width="970px",height="100%"),
-                                   actionButton("samplesQueryApply", label = "Apply filters"),
+                                   actionButton("samplesQueryApply", label = "Apply filter"),
                                    tags$script('
                                       function sqlQuerySamplesFunction() {
                                       var sqlQuerySamples = $("#queryBuilderSamples").queryBuilder("getSQL", false);
@@ -38,17 +38,17 @@ shinyUI(
                                  '),
                                    tags$script('            
                                       Shiny.addCustomMessageHandler("callbackHandlerSelectSampleGroup",  function(sqlQuery) {
-                                           if (sqlQuery=="") $("#queryBuilderSamples").queryBuilder("reset")
+                                           if (sqlQuery=="reset") $("#queryBuilderSamples").queryBuilder("reset")
                                            else $("#queryBuilderSamples").queryBuilder("setRulesFromSQL",sqlQuery);
                                       });
                                 '),
-                                   actionButton("samplesQuerySave", label = "Save group"),
-                                   bsModal("modalSamplesQuerySave", "Save group", "samplesQuerySave", 
+                                   actionButton("samplesQuerySave", label = "Save filter"),
+                                   bsModal("modalSamplesQuerySave", "Save filter", "samplesQuerySave", 
                                            size = "small",
-                                           textInput("sampleGoupNameSave", "Save group as :", value = ""),
+                                           textInput("sampleGoupNameSave", "Save filter as :", value = ""),
                                            actionButton("samplesQuerySave2", label = "Save")
                                    ),
-                                   actionButton("deleteButtonSampleGroup", label = "Delete group"),
+                                   actionButton("deleteButtonSampleGroup", label = "Delete filter"),
                                    bsModal("deleteConfirmSampleGroup", "Are you sure?", "deleteButtonSampleGroup", 
                                            size = "small",
                                            actionButton("deleteConfirmYesButtonSampleGroup", label="Yes")
@@ -77,7 +77,7 @@ shinyUI(
                           tags$div(class="extraspace2"),
                           fluidRow(
                             column(3,
-                                   h3("1) Sample groups"),
+                                   h3("1) Variants groups"),
                                    uiOutput("selectSampleGroup1UI"),
                                    uiOutput("selectSampleGroup2UI")
                             ),
@@ -87,31 +87,34 @@ shinyUI(
                                                 c("Gene" = "gene",
                                                   "Variant" = "variant"
                                                 )),
-                                   selectInput('rankEngine_selectedGeneListVariantSet', 'Gene/Variant set ',selected="All",
-                                               choices = list(
-                                                 "Genes" = c('All'='allg','GeneList1' = 'l1', "GeneList2" = 'l2', "GeneList3"="l3"),
-                                                 "Variants" = c('All'='allv','VariantList1' = 'v1', "VariantList2" = 'l2')
-                                               ), 
-                                               selectize = FALSE),
-                                   checkboxGroupInput("rankingCriterion", "Ranking criterion",
-                                                      c("Univariate entropy" = "entropy",
-                                                        "Univariate student p-value" = "pvalue",
+                                   radioButtons("multivariateRankingRadio", "Interaction",
+                                                c("Univariate" = "univariate",
+                                                  "Bivariate" = "bivariate"
+                                                )),
+                                   checkboxGroupInput("rankingCriterion", "Scoring function",
+                                                      c("Count" = "count",
+                                                        "Odds ratio" = "oddsratio",
+                                                        "Student p-value" = "pvalue",
                                                         "Minimum Redundancy Maximum Relevance" = "mrmr"
                                                       ),
-                                                      selected=c("entropy","pvalue"))
+                                                      selected=c("count","pvalue"))
                             ),
                             column(3,
                                    h3("3) Results collection"),
                                    textInput("analysisName","Analysis name",""),
                                    radioButtons("email", "Mail notification",
                                                 c("Yes" = "yes",
-                                                  "No" = "no"
-                                                ))
+                                                  "No" = "no"),
+                                                selected=c("no"))
                             )
                           ),
+                          hr(),
                           fluidRow(
-                            column(12,
-                                   hr(),
+                            column(2,offset=3,
+                                   div(actionButton("estimateAnalysisTimeButton","Estimate analysis time"),align="center"),
+                                   tags$div(class="extraspace1")
+                            ),
+                            column(2,
                                    div(actionButton("startAnalysisButton","Start analysis"),align="center"),
                                    tags$div(class="extraspace1")
                             )

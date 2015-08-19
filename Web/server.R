@@ -11,9 +11,9 @@ shinyServer(function(input, output,session) {
   sessionvalues$data<-loadData("")$data
   sessionvalues$samplesSets<-loadSet("samplesSets","")
   sessionvalues$nbRowsExceededWarningMessage<-""
-  sessionvalues$currentResults<-results[[1]][[1]]
+  sessionvalues$results<-resultsAll
   sessionvalues$analyses<-analyses
-  sessionvalues$analysesNames<-names(analyses)
+  sessionvalues$analysesNames<-analysesNames
   
   ####################################################
   #Sample group manager
@@ -24,24 +24,28 @@ shinyServer(function(input, output,session) {
   })
   
   output$selectSampleGroupUI<-renderUI({
-    selectInput('selectedSampleGroup', 'Select group', 
+    selectInput('selectedSampleGroup', 'Select filter', 
                 choices = list("Groups"=sessionvalues$samplesSets$group), 
                 selected=sessionvalues$samplesSets$group[1],
                 selectize = FALSE)
   })
   
+  #Select group
   observe({
     if (length(input$selectedSampleGroup)>0) {
       selectedSampleGroupIndex<-which(sessionvalues$samplesSets$group==input$selectedSampleGroup)
       if (length(selectedSampleGroupIndex)==0) selectedSampleGroupIndex<-1
       sql<-sessionvalues$samplesSets[selectedSampleGroupIndex,2]
-      session$sendCustomMessage(type='callbackHandlerSelectSampleGroup', sql)
+      sqlQuery<-sql
+      if (sqlQuery=="") sqlQuery<-"reset"
+      session$sendCustomMessage(type='callbackHandlerSelectSampleGroup', sqlQuery)
       data<-loadData(sql)
       sessionvalues$data<-data$data
       sessionvalues$nbRowsExceededWarningMessage<-data$nbRowsExceededWarningMessage
     }
   })
   
+  #Delete group
   observe({
     if (length(input$deleteConfirmYesButtonSampleGroup)>0 & input$deleteConfirmYesButtonSampleGroup) {
       isolate({
@@ -49,21 +53,23 @@ shinyServer(function(input, output,session) {
         groupsdb<-dbConnect(RSQLite::SQLite(), "../samplesSets.db")
         dbWriteTable(groupsdb,"samplesSets",sessionvalues$samplesSets,overwrite=T,row.names=F)
         dbDisconnect(groupsdb)
-        toggleModal(session, "deleteConfirmSampleGroup", toggle = "close")
       })
+      toggleModal(session, "deleteConfirmSampleGroup", toggle = "close")
       sessionvalues$samplesSets<-loadSet("samplesSets","")
+      session$sendCustomMessage(type='callbackHandlerSelectSampleGroup', "")
     }
   })
   
+  #Apply filters
   observe({
     if (length(input$sqlQuerySamplesValue)) {
       data<-loadData(input$sqlQuerySamplesValue)
       sessionvalues$data<-data$data
       sessionvalues$nbRowsExceededWarningMessage<-data$nbRowsExceededWarningMessage
-      
     }
   })
   
+  #Save
   observe({
     input$samplesQuerySave2
     isolate({
@@ -74,7 +80,7 @@ shinyServer(function(input, output,session) {
         dbWriteTable(groupsdb,"samplesSets",data,append=T)
         dbDisconnect(groupsdb)
         toggleModal(session, "modalSamplesQuerySave", toggle = "close")
-        sessionvalues$samplesSets<-loadSet("samplesSets","")
+        isolate({sessionvalues$samplesSets<-loadSet("samplesSets","")})
       }
     })
   })
@@ -89,7 +95,7 @@ shinyServer(function(input, output,session) {
     isolate({
       niceNames<-as.vector(sapply(colnames(sessionvalues$data),idToName))
       selectInput('showVarPhenotype', 'Select variables to display', niceNames, 
-                  selected=niceNames[c(1,30:37,39,2:7)],multiple=TRUE, selectize=TRUE,width='1050px')
+                  selected=niceNames[c(1,36:37,39,2:7)],multiple=TRUE, selectize=TRUE,width='1050px')
     })
   })
   
@@ -143,12 +149,18 @@ shinyServer(function(input, output,session) {
       analyses[[analysisName]]$group1<-sessionvalues$samplesSets[selectSampleGroupIndex1,]
       analyses[[analysisName]]$group2<-sessionvalues$samplesSets[selectSampleGroupIndex2,]
       
-      controlData<-loadData(sessionvalues$samplesSets[selectSampleGroupIndex1,'sql'],noLimit=T)[[1]]
-      caseData<-loadData(sessionvalues$samplesSets[selectSampleGroupIndex2,'sql'],noLimit=T)[[1]]
+      controlData<-loadData(sessionvalues$samplesSets[selectSampleGroupIndex1,'sql'],noLimit=T,excludeID=F)[[1]]
+      caseData<-loadData(sessionvalues$samplesSets[selectSampleGroupIndex2,'sql'],noLimit=T,excludeID=F)[[1]]
+      
+      samplesID<-c(unique(caseData[,'Sample_ID']),unique(controlData[,'Sample_ID']))
+      nCases<-length(unique(caseData[,'Sample_ID']))
       
       variantData<-rbind(controlData,caseData)
       variantData[is.na(variantData)]<-''
       analyses[[analysisName]]$variantData<-variantData
+      analyses[[analysisName]]$samplesID<-samplesID
+      analyses[[analysisName]]$nCases<-nCases
+      
       save(file="../analyses.Rdata",analyses)
       sessionvalues$analyses<-analyses
       sessionvalues$analysesNames<-names(analyses)
@@ -167,52 +179,63 @@ shinyServer(function(input, output,session) {
     ), selected=sessionvalues$analysesNames[1],selectize = FALSE)
   })
   
+  output$showVarResultsUI<-renderUI({
+    nameAnalysis<-input$selectAnalysis
+    niceNames<-as.vector(sapply(colnames(sessionvalues$results[[nameAnalysis]][[1]]$scoreSummary),idToName))[-2]
+    selectInput('showVarResults', 'Select variables to display', niceNames, 
+                selected=niceNames[c(1:3,7)],multiple=TRUE, selectize=TRUE,width='1050px')
+  })
+  
+  
   output$resultsTable<-renderDataTable({
-    data<-sessionvalues$currentResults$scoreSummary
-#     if (!is.null(dim(data))) {
-#       widget = datatable(data, 
-#                          server = FALSE, 
-#                          escape=F,
-#                          selection = 'single',
-#                          filter = 'top',
-#                          rownames=T,
-#                          options = list(
-#                            dom= 'liptlpi',
-#                            lengthMenu = list(c(10, 25, 100), c('10', '25','100')),pageLength = 10,
-#                            autoWidth = F,
-#                            columnDefs = list(
-#                              list(className="dt-right",targets="_all")
-#                            )
-#                          )
-#       )
-#       widget
-#     }
+    if (length(input$showVarResults)>0) {
+      nameAnalysis<-input$selectAnalysis
+      data<-sessionvalues$results[[nameAnalysis]][[1]]$scoreSummary[,sapply(input$showVarResults,nameToId)]
+      getWidgetTable(data,session,'single')
+    }
   },server=TRUE)
-
+  
   observe({
     nameAnalysis<-input$selectAnalysis
     if (length(input$resultsTable_rows_selected)) {
-      geneID<-sessionvalues$currentResults$scoreSummary[input$resultsTable_rows_selected,'Gene']
-      data<-sessionvalues$analyses[[nameAnalysis]]$variantData
-      sessionvalues$analyses[[nameAnalysis]]$variantDataGene<-data[which(data[,'Gene_Ensembl']==geneID),]
+      if (sessionvalues$results[[nameAnalysis]][[1]]$type=="singleVariant") {
+        variantsLocus<-sessionvalues$results[[nameAnalysis]][[1]]$scoreSummary[input$resultsTable_rows_selected,'ID']
+        i.match<-which(sessionvalues$analyses[[nameAnalysis]]$variantData[,'ID']==variantsLocus)
+        sessionvalues$analyses[[nameAnalysis]]$variantDataGene<-sessionvalues$analyses[[nameAnalysis]]$variantData[i.match,-c(1)]
+      }
+      if (sessionvalues$results[[nameAnalysis]][[1]]$type=="geneUnivariate") {
+        geneID<-sessionvalues$results[[nameAnalysis]][[1]]$scoreSummary[input$resultsTable_rows_selected,'Gene']
+        data<-sessionvalues$analyses[[nameAnalysis]]$variantData
+        sessionvalues$analyses[[nameAnalysis]]$variantDataGene<-data[which(data[,'Gene_Ensembl']==geneID),]
+      }
+    }
+  })
+  
+  output$showVarMetadataUI<-renderUI({
+    nameAnalysis<-input$selectAnalysis
+    if (length(sessionvalues$analyses[[nameAnalysis]]$variantDataGene)>0) {
+      niceNames<-as.vector(sapply(colnames(sessionvalues$analyses[[nameAnalysis]]$variantDataGene),idToName))
+      selectInput('showVarMetadata', 'Select variables to display', niceNames, 
+                  selected=niceNames[c(1:7,23:25)],multiple=TRUE, selectize=TRUE,width='1050px')
     }
   })
   
   output$variantsMetadataTable<-DT::renderDataTable({
     isolate({nameAnalysis<-input$selectAnalysis})
-    if (length(sessionvalues$analyses[[nameAnalysis]]$variantDataGene)>0) {
-      data<-sessionvalues$analyses[[nameAnalysis]]$variantDataGene
+    if (length(sessionvalues$analyses[[nameAnalysis]]$variantDataGene)>0 & length(input$showVarMetadata)>0) {
+      data<-sessionvalues$analyses[[nameAnalysis]]$variantDataGene[,sapply(input$showVarMetadata,nameToId)]
       getWidgetTable(data,session)
     }
   })
   
   output$variantsMetadataPivotTable<-renderRpivotTable({
     isolate({nameAnalysis<-input$selectAnalysis})
-    if (length(sessionvalues$analyses[[nameAnalysis]]$variantDataGene)>0) {
-      data<-sessionvalues$analyses[[nameAnalysis]]$variantDataGene
+    if (length(sessionvalues$analyses[[nameAnalysis]]$variantDataGene)>0 & length(input$showVarMetadata)>0) {
+      data<-sessionvalues$analyses[[nameAnalysis]]$variantDataGene[,sapply(input$showVarMetadata,nameToId)]
       rpivotTable(data)
     }
   })
+  
   
   output$resultsMetadata<-renderUI({
     fluidRow(
@@ -240,13 +263,15 @@ shinyServer(function(input, output,session) {
              uiOutput("resultsMetadata"),
              hr(),
              h3("Ranking results"),
+             uiOutput("showVarResultsUI"),
              DT::dataTableOutput('resultsTable'),
              hr(),
-             h3("Result details"),
+             h3("Advanced browsing"),
              fluidRow(
                column(12,
+                      checkboxInput("checkboxAddMetadata", label = "Include all variants matching sample IDs ", value = FALSE),
                       fluidRow(
-                        h4("Variant metadata"),
+                        uiOutput("showVarMetadataUI"),
                         dataTableOutput('variantsMetadataTable')
                       ),
                       fluidRow(

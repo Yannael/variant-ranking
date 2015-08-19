@@ -92,7 +92,7 @@ createCopyHighlanderDB<-function() {
   colnames(data)<-c('ID',fieldsInfoNewNames)
   #data<-data[order(data[,3],data[,4]),]
   
-  variantsdb <- dbConnect(RSQLite::SQLite(), variantDBfile)
+  variantsdb <- dbConnect(RSQLite::SQLite(), "variants.db")
   dbWriteTable(variantsdb,"variants",data,overwrite=T,row.names=F)
   
   phenotypesdb<-dbConnect(RSQLite::SQLite(), paste0("phenotypes.db"))
@@ -105,7 +105,9 @@ createCopyHighlanderDB<-function() {
   #Remove duplicate Sample_ID column
   data<-data[,-which(colnames(data)=="Sample_ID")[2]]
   
-  data[,'Chr']<-as.factor(data[,'Chr'],levels=c(1:22,'X','Y'))
+  data[data==""]<-NA
+  
+  data[,'Chr']<-factor(data[,'Chr'],levels=c(1:22,'X','Y'))
   data[,'Change_Type']<-as.factor(data[,'Change_Type'])
   data[,'Snpeff_Effect']<-as.factor(data[,'Snpeff_Effect'])
   data[,'Snpeff_Impact']<-as.factor(data[,'Snpeff_Impact'])
