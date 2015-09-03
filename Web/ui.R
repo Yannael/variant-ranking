@@ -36,7 +36,7 @@ shinyUI(
                                       document.getElementById("samplesQueryApply").onclick = function() {sqlQuerySamplesFunction()}
                                       document.getElementById("samplesQuerySave").onclick = function() {sqlQuerySamplesFunction()}
                                  '),
-                                   tags$script('            
+                                 tags$script('            
                                       Shiny.addCustomMessageHandler("callbackHandlerSelectSampleGroup",  function(sqlQuery) {
                                            if (sqlQuery=="reset") $("#queryBuilderSamples").queryBuilder("reset")
                                            else $("#queryBuilderSamples").queryBuilder("setRulesFromSQL",sqlQuery);

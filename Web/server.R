@@ -5,6 +5,7 @@ library(ggplot2)
 library(queryBuildR)
 library(shinyBS)
 library(rpivotTable)
+library(httr)
 
 shinyServer(function(input, output,session) {
   sessionvalues <- reactiveValues()
@@ -14,6 +15,8 @@ shinyServer(function(input, output,session) {
   sessionvalues$results<-resultsAll
   sessionvalues$analyses<-analyses
   sessionvalues$analysesNames<-analysesNames
+  sessionvalues$checkboxAddMetadata<-F
+  sessionvalues$variantDataGene<-NULL
   
   ####################################################
   #Sample group manager
@@ -173,25 +176,45 @@ shinyServer(function(input, output,session) {
   ####################################################
   
   output$selectAnalysisUI<-renderUI({
-    
     selectInput('selectAnalysis', 'Select analysis', choices = list(
       "Available analyses" = sessionvalues$analysesNames
     ), selected=sessionvalues$analysesNames[1],selectize = FALSE)
   })
   
+  dummy<-function() {
+    r <- POST("http://api.omim.org/api/apiKey",query = list(apiKey = "DE2F57B0E7899D4D81351AFCFE44914C610ABF03"))
+    res <- GET("http://api.omim.org/api/gene",query = list(search = "mental"))  
+  }
+  
   output$showVarResultsUI<-renderUI({
     nameAnalysis<-input$selectAnalysis
-    niceNames<-as.vector(sapply(colnames(sessionvalues$results[[nameAnalysis]][[1]]$scoreSummary),idToName))[-2]
+    if (sessionvalues$results[[nameAnalysis]][[1]]$type=="singleVariant") {
+      niceNames<-as.vector(sapply(colnames(sessionvalues$results[[nameAnalysis]][[1]]$scoreSummary),idToName))[-2]
+      initialSelect<-niceNames[c(1:3,7)]
+    }
+    if (sessionvalues$results[[nameAnalysis]][[1]]$type=="geneUnivariate") {
+      niceNames<-as.vector(sapply(colnames(sessionvalues$results[[nameAnalysis]][[1]]$scoreSummary),idToName))
+      initialSelect<-niceNames[1:4]
+    }
+    if (sessionvalues$results[[nameAnalysis]][[1]]$type=="geneBivariate") {
+      niceNames<-as.vector(sapply(colnames(sessionvalues$results[[nameAnalysis]][[1]]$scoreSummary),idToName))
+      initialSelect<-niceNames[c(1:4,8)]
+    }
     selectInput('showVarResults', 'Select variables to display', niceNames, 
-                selected=niceNames[c(1:3,7)],multiple=TRUE, selectize=TRUE,width='1050px')
+                selected=initialSelect,multiple=TRUE, selectize=TRUE,width='1050px')
   })
   
   
   output$resultsTable<-renderDataTable({
     if (length(input$showVarResults)>0) {
       nameAnalysis<-input$selectAnalysis
-      data<-sessionvalues$results[[nameAnalysis]][[1]]$scoreSummary[,sapply(input$showVarResults,nameToId)]
-      getWidgetTable(data,session,'single')
+      if (length(setdiff(sapply(input$showVarResults,nameToId),colnames(sessionvalues$results[[nameAnalysis]][[1]]$scoreSummary)))==0) {
+        data<-sessionvalues$results[[nameAnalysis]][[1]]$scoreSummary[,sapply(input$showVarResults,nameToId)]
+        targetsShort<-which(colnames(data)!="Gene_Symbol")
+        colnames(data)<-input$showVarResults
+        #getWidgetTable(data,session,selection='single',targetsShort=c(1:6,8:25))
+        getWidgetTable(data,session,selection='single',targetsShort=targetsShort)
+      }
     }
   },server=TRUE)
   
@@ -201,37 +224,85 @@ shinyServer(function(input, output,session) {
       if (sessionvalues$results[[nameAnalysis]][[1]]$type=="singleVariant") {
         variantsLocus<-sessionvalues$results[[nameAnalysis]][[1]]$scoreSummary[input$resultsTable_rows_selected,'ID']
         i.match<-which(sessionvalues$analyses[[nameAnalysis]]$variantData[,'ID']==variantsLocus)
-        sessionvalues$analyses[[nameAnalysis]]$variantDataGene<-sessionvalues$analyses[[nameAnalysis]]$variantData[i.match,-c(1)]
+        sessionvalues$variantDataGene<-sessionvalues$analyses[[nameAnalysis]]$variantData[i.match,-c(1)]
       }
       if (sessionvalues$results[[nameAnalysis]][[1]]$type=="geneUnivariate") {
-        geneID<-sessionvalues$results[[nameAnalysis]][[1]]$scoreSummary[input$resultsTable_rows_selected,'Gene']
+        geneID<-sessionvalues$results[[nameAnalysis]][[1]]$scoreSummary[input$resultsTable_rows_selected,'Gene_Ensembl']
         data<-sessionvalues$analyses[[nameAnalysis]]$variantData
-        sessionvalues$analyses[[nameAnalysis]]$variantDataGene<-data[which(data[,'Gene_Ensembl']==geneID),]
+        sessionvalues$variantDataGene<-data[which(data[,'Gene_Ensembl']==geneID),]
+      }
+    }
+  })
+  
+  observe({
+    data<-NULL
+    nameAnalysis<-input$selectAnalysis
+    if (!is.null(input$checkboxAddMetadata)) {
+      
+      if (input$checkboxAddMetadata & !sessionvalues$checkboxAddMetadata){
+        sessionvalues$checkboxAddMetadata<-T
+        isolate({
+          samplesID<-sessionvalues$analyses[[nameAnalysis]]$samplesID
+          if (sessionvalues$results[[nameAnalysis]][[1]]$type=="singleVariant") {
+            variantsLocus<-sessionvalues$results[[nameAnalysis]][[1]]$scoreSummary[input$resultsTable_rows_selected,'ID']
+            data<-loadData(paste0("ID='",variantsLocus,"'"),noLimit=T)[[1]]
+            data<-data[which(data[,'Sample_ID'] %in% samplesID),]
+            data[is.na(data)]<-''
+          }
+          
+          if (sessionvalues$results[[nameAnalysis]][[1]]$type=="geneUnivariate") {
+            geneID<-sessionvalues$results[[nameAnalysis]][[1]]$scoreSummary[input$resultsTable_rows_selected,'Gene_Ensembl']
+            data<-loadData(paste0("Gene_Ensembl='",geneID,"'"),noLimit=T)[[1]]
+            data<-data[which(data[,'Sample_ID'] %in% samplesID),]
+            data[is.na(data)]<-''
+          }
+        })
+        sessionvalues$variantDataGene<-data
+        
+        
+      }
+      if (!input$checkboxAddMetadata & sessionvalues$checkboxAddMetadata){
+        sessionvalues$checkboxAddMetadata<-F
+        isolate({
+          if (sessionvalues$results[[nameAnalysis]][[1]]$type=="singleVariant") {
+            variantsLocus<-sessionvalues$results[[nameAnalysis]][[1]]$scoreSummary[input$resultsTable_rows_selected,'ID']
+            i.match<-which(sessionvalues$analyses[[nameAnalysis]]$variantData[,'ID']==variantsLocus)
+            data<-sessionvalues$analyses[[nameAnalysis]]$variantData[i.match,-c(1)]
+          }
+          if (sessionvalues$results[[nameAnalysis]][[1]]$type=="geneUnivariate") {
+            geneID<-sessionvalues$results[[nameAnalysis]][[1]]$scoreSummary[input$resultsTable_rows_selected,'Gene_Symbol']
+            i.match<-which(sessionvalues$analyses[[nameAnalysis]]$variantData[,'Gene_Symbol']==geneID)
+            data<-sessionvalues$analyses[[nameAnalysis]]$variantData[i.match,-c(1)]
+          }
+        })
+        sessionvalues$variantDataGene<-data
+        
       }
     }
   })
   
   output$showVarMetadataUI<-renderUI({
     nameAnalysis<-input$selectAnalysis
-    if (length(sessionvalues$analyses[[nameAnalysis]]$variantDataGene)>0) {
-      niceNames<-as.vector(sapply(colnames(sessionvalues$analyses[[nameAnalysis]]$variantDataGene),idToName))
+    if (length(sessionvalues$variantDataGene)>0) {
+      niceNames<-as.vector(sapply(colnames(sessionvalues$variantDataGene),idToName))
       selectInput('showVarMetadata', 'Select variables to display', niceNames, 
                   selected=niceNames[c(1:7,23:25)],multiple=TRUE, selectize=TRUE,width='1050px')
     }
   })
   
   output$variantsMetadataTable<-DT::renderDataTable({
-    isolate({nameAnalysis<-input$selectAnalysis})
-    if (length(sessionvalues$analyses[[nameAnalysis]]$variantDataGene)>0 & length(input$showVarMetadata)>0) {
-      data<-sessionvalues$analyses[[nameAnalysis]]$variantDataGene[,sapply(input$showVarMetadata,nameToId)]
+    nameAnalysis<-input$selectAnalysis
+    if (length(sessionvalues$variantDataGene)>0 & length(input$showVarMetadata)>0) {
+      data<-sessionvalues$variantDataGene[,sapply(input$showVarMetadata,nameToId)]
       getWidgetTable(data,session)
     }
   })
   
   output$variantsMetadataPivotTable<-renderRpivotTable({
-    isolate({nameAnalysis<-input$selectAnalysis})
-    if (length(sessionvalues$analyses[[nameAnalysis]]$variantDataGene)>0 & length(input$showVarMetadata)>0) {
-      data<-sessionvalues$analyses[[nameAnalysis]]$variantDataGene[,sapply(input$showVarMetadata,nameToId)]
+    input$checkboxAddMetadata
+    nameAnalysis<-input$selectAnalysis
+    if (length(sessionvalues$variantDataGene)>0 & length(input$showVarMetadata)>0) {
+      data<-sessionvalues$variantDataGene[,sapply(input$showVarMetadata,nameToId)]
       rpivotTable(data)
     }
   })

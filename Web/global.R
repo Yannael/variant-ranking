@@ -3,16 +3,17 @@
 require("RMySQL")
 require("jsonlite")
 require('rpivotTable')
+require('plyr')
 
 username<-'yleborgn'
 
 #load("myResults.Rdata")
 
-getWidgetTable<-function(data,session,selection='none') {
+getWidgetTable<-function(data,session,selection='none',targetsShort="_all") {
   action <- dataTableAjax(session, data,rownames=F)
   widget<-datatable(data, 
                     rownames=F,
-                    escape=T,
+                    escape=F,
                     selection = selection,
                     options = list(
                       ajax = list(url = action),
@@ -20,7 +21,7 @@ getWidgetTable<-function(data,session,selection='none') {
                       lengthMenu = list(c(10, 100, 1000), c('10', '100','1000')),pageLength = 10,
                       columnDefs = list(
                         list(
-                          targets = c("_all"),
+                          targets = c(1),
                           render = JS(
                             "function(data, type, row, meta) {",
                             "return type === 'display' && data.length > 15 ?",
@@ -94,7 +95,8 @@ procRes<-function(results,analysisName) {
     variantsID<-res$locus[2,]
     i.match<-match(variantsID,analyses[[analysisName]]$variantData$ID)
     scoreSummary1<-analyses[[analysisName]]$variantData[i.match,c(1,3:6,16:35)]
-    
+    scoreSummary1[,'Gene_Symbol']<-paste0("<a href='http://www.ncbi.nlm.nih.gov/omim/?term=",scoreSummary1[,'Gene_Symbol'],"' target='_blank'>",scoreSummary1[,'Gene_Symbol'],"</a>")
+    #browser()
     if (results[[2]]=="singleVariant") {
       #scoreSummary1<-cbind(scoreSummary1,Score=res$infovariants1[,'gene_symbol'])
     }
@@ -122,9 +124,29 @@ procRes<-function(results,analysisName) {
   }
   
   if (res$type=="geneUnivariate") {
-    scoreSummary1<-cbind(res$locus)
-    res$scoreSummary<-cbind(scoreSummary1,t(res$scores))
-    colnames(res$scoreSummary)<-c("Gene","Score","Score case","Score control")
+    geneID<-res$locus
+    i.match<-match(geneID,analyses[[analysisName]]$variantData$Gene_Ensembl)
+    scoreSummary1<-analyses[[analysisName]]$variantData[i.match,c(17:20)]
+    scoreSummary1[,'Gene_Symbol']<-paste0("<a href='http://www.ncbi.nlm.nih.gov/omim/?term=",scoreSummary1[,'Gene_Symbol'],"' target='_blank'>",scoreSummary1[,'Gene_Symbol'],"</a>")
+    res$scoreSummary<-cbind(t(res$scores),scoreSummary1)
+    colnames(res$scoreSummary)[1:3]<-c("Score","Score_Case","Score_Control")
+  }
+  
+  if (res$type=="geneBivariate") {
+    genes<-ldply(res$scores[1,])
+    res$scores<-res$scores[2:4,]
+    geneID<-genes[,1]
+    i.match<-match(geneID,analyses[[analysisName]]$variantData$Gene_Ensembl)
+    scoreSummary1<-analyses[[analysisName]]$variantData[i.match,c(17:20)]
+    colnames(scoreSummary1)<-paste0(colnames(scoreSummary1),"1")
+    geneID<-genes[,2]
+    i.match<-match(geneID,analyses[[analysisName]]$variantData$Gene_Ensembl)
+    scoreSummary2<-analyses[[analysisName]]$variantData[i.match,c(17:20)]
+    colnames(scoreSummary2)<-paste0(colnames(scoreSummary2),"2")
+    scoreSummary1[,'Gene_Symbol1']<-paste0("<a href='http://www.ncbi.nlm.nih.gov/omim/?term=",scoreSummary1[,'Gene_Symbol1'],"' target='_blank'>",scoreSummary1[,'Gene_Symbol1'],"</a>")
+    scoreSummary2[,'Gene_Symbol2']<-paste0("<a href='http://www.ncbi.nlm.nih.gov/omim/?term=",scoreSummary2[,'Gene_Symbol2'],"' target='_blank'>",scoreSummary2[,'Gene_Symbol2'],"</a>")
+    res$scoreSummary<-cbind(t(res$scores),scoreSummary1,scoreSummary2)
+    colnames(res$scoreSummary)[1:3]<-c("Score","Score_Case","Score_Control")
   }
   
   res
