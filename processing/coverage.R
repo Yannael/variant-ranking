@@ -4,7 +4,7 @@ require(plyr)
 
 createGenotypeMatrix<-function() {
   
-  analysisName="ULB_Control_vs_NeuroDev_Damaging"
+  analysisName="ULB_Control_vs_NeuroDev_Damaging_Gene"
   
   load("analyses.Rdata")
   
@@ -13,12 +13,12 @@ createGenotypeMatrix<-function() {
   samplesID<-analyses[[analysisName]]$samplesID
   
   #Trios
-  samplesID<-read.table('mappingZH_ISDBM_withFMC.txt',stringsAsFactors=F)[,1]
+  #samplesID<-read.table('mappingZH_ISDBM_withFMC.txt',stringsAsFactors=F)[,1]
   
   genoMat<-dcast(DF,Gene_Ensembl+ID~Sample_ID,fill=0)
   genoMat<-genoMat[,c(1,2,match(samplesID,colnames(genoMat)))] 
   
-  write.table(file="genoMatTriosDamaging.txt",genoMat,col.names=F,row.names=F,quote=F)
+  write.table(file="genoMatDamagingNotOrdered.txt",genoMat,col.names=F,row.names=F,quote=F)
   
 }
 
