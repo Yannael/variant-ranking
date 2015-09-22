@@ -1,12 +1,13 @@
 Sys.setenv(SPARK_HOME="/Users/yalb/spark")
+Sys.setenv(SPARK_CLASSPATH="/Users/yalb/Projects/Github/variant-ranking/sqlite-jdbc-3.8.11.1.jar")
 #Sys.setenv(SPARK_HOME="/home/yleborgn/spark")
-Sys.setenv(DYLD_FALLBACK_LIBRARY_PATH="/Library/Java/JavaVirtualMachines/jdk1.7.0_79.jdk/Contents/Home/jre/lib/server/")
-Sys.setenv(HADOOP_JAR="/Users/yalb/spark/assembly/target/scala-2.10/spark-assembly-1.4.1-hadoop2.4.0.jar")
+Sys.setenv(DYLD_FALLBACK_LIBRARY_PATH="/Library/Java/JavaVirtualMachines/jdk1.7.0_80.jdk/Contents/Home/jre/lib/server/")
+Sys.setenv(HADOOP_JAR="/Users/yalb/spark/assembly/target/scala-2.10/spark-assembly-1.5.0-hadoop2.4.0.jar")
 # This line loads SparkR from the installed directory
 .libPaths(c(file.path(Sys.getenv("SPARK_HOME"), "R", "lib"), .libPaths()))
 library(SparkR)
-sc <- sparkR.init(master="local")
 
+sc <- sparkR.init(master="local")
 sqlContext <- sparkRSQL.init(sc)
 
 condb<-dbConnect(RSQLite::SQLite(), paste0("data.db"))
@@ -15,11 +16,17 @@ dbDisconnect(condb)
 
 save(file="data.Rdata",data)
 
-system.time(DF <- createDataFrame(sqlContext, data[1:1000,]))
+df <- loadDF(sqlContext, source="jdbc", url="jdbc:sqlite:samplesSets.db", dbtable="schema.groups")
 
-system.time(flightsDF <- read.df(sqlContext, flightsCsvPath, source = "com.databricks.spark.csv", header = "true"))
+system.time(DF <- createDataFrame(sqlContext, data[1:4000,]))
 
-destDF <- select(DF, "Data_Source", "ULB")
+
+saveDF((DF, "namesAndAges.parquet", "parquet"))
+
+DF2 <- loadDF(sqlContext, "namesAndAges.parquet")  
+
+
+destDF <- filter(DF,DF$Data_Source== "ULB")
 
 
 library(dplyr)
@@ -43,6 +50,7 @@ c1 = filter(DF2, chr=2)
 
 my_db = src_SparkSQL()
 
+genoMat<-read.table("geno100m30.txt")
 DF<-genoMat[1:100000,1:30]
 
 #data 41 col
@@ -58,6 +66,9 @@ system.time(df <- createDataFrame(sqlContext, DF52) )
 
 
 my_db <- src_sqlite("data.db")
+system.time(db<-tbl(my_db,"variants"))
+system.time(dd<-filter(db, position < "2005"))
+system.time(dim(dd))
 
-dd<- sql(my_db,"SELECT * FROM variants")
+system.time(dd<- sql(my_db,"SELECT * FROM variants where pos<1000"))
 
