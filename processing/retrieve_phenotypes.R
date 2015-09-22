@@ -31,7 +31,7 @@ getPhenoHighlander<-function() {
   #print(dbListTables(highlanderdb))
   #dbListFields(highlanderdb, 'exomes_ug')
   
-  rs = dbSendQuery(highlanderdb, "select distinct patient,pathology from exomes_ug")
+  rs = dbSendQuery(highlanderdb, "select distinct patient,pathology from exomes_hc")
   data = fetch(rs, n=-1)
   
   N<-nrow(data)
