@@ -21,7 +21,7 @@ geneIDs<-c("TUBB2A","TCL1A")
 #genotype_quality>70 and
 #snpeff_effect<>'SYNONYMOUS_CODING' and 
 
-fieldsInfo<-c("patient","chr","pos","reference","alternative","zygosity","read_depth","allelic_depth_ref","allelic_depth_alt","genotype_quality",
+fieldsInfo<-c("patient","chr","pos","reference","alternative","zygosity","read_depth","allelic_depth_proportion_ref","allelic_depth_proportion_alt","genotype_quality",
               "filters","downsampled","mapping_quality_zero_reads","allele_num",
               "change_type", "gene_symbol", "gene_ensembl", "transcript_ensembl","num_genes","clinvar_rs", 
               "consensus_MAF","consensus_MAC", "dbsnp_id_137",
@@ -30,7 +30,7 @@ fieldsInfo<-c("patient","chr","pos","reference","alternative","zygosity","read_d
               "pph2_hvar_score", "pph2_hvar_pred", "sift_score", "sift_pred", "short_tandem_repeat")
 
 fieldsInfoNewNames<-c("Sample_ID","Chr","Position","Reference","Alternative",
-                      "Zygosity","Read_Depth","Allelic_Depth_Ref","Allelic_Depth_Alt","Genotype_Quality"
+                      "Zygosity","Read_Depth","Allelic_Depth_Ref_Prop","Allelic_Depth_Alt_Prop","Genotype_Quality"
                       ,"Filters","Downsampled","Mapping_Quality_Zero_Reads","Allele_Num",
                       "Change_Type", "Gene_Symbol", "Gene_Ensembl","Transcript_Ensembl", "Num_Genes","Clinvar_RS", 
                       "Consensus_MAF","Consensus_MAC", "dbsnp_id_137",
@@ -45,7 +45,7 @@ dummy<-function() {
   
   #Regular Highlander
   connectFile<-"../connectHighlander.R"
-  tablename<-"exomes_ug"
+  tablename<-"exomes_hc"
   variantDBfile<-"variants.db"
   sequencingDBfile<-"sequencingULB.db"
   
@@ -72,7 +72,7 @@ createCopyHighlanderDB<-function() {
   fields_select<-paste(unique(c(fieldsInfo)),collapse=",")
   
   #For 1000g
-  subsamples<-paste0("('",paste(samples[1:100],sep="",collapse="','"),"')")
+  subsamples<-paste0("('",paste(samples[1:3],sep="",collapse="','"),"')")
   system.time(data <- dbGetQuery(highlanderdb,paste0("select ",fields_select," from ",tablename," where patient in ",subsamples)))
   
   #For ULB
@@ -122,8 +122,8 @@ createCopyHighlanderDB<-function() {
   data[,'PPH2_hdiv_score']<-as.numeric(data[,'PPH2_hdiv_score'])
   data[,'PPH2_hvar_score']<-as.numeric(data[,'PPH2_hvar_score'])
   data[,'SIFT_Score']<-as.numeric(data[,'SIFT_Score'])
-  data[,'Allelic_Depth_Ref']<-as.numeric(data[,'Allelic_Depth_Ref'])
-  data[,'Allelic_Depth_Alt']<-as.numeric(data[,'Allelic_Depth_Alt'])
+  data[,'Allelic_Depth_Ref_Prop']<-as.numeric(data[,'Allelic_Depth_Ref_Prop'])
+  data[,'Allelic_Depth_Alt_Prop']<-as.numeric(data[,'Allelic_Depth_Alt_Prop'])
   data[,'Genotype_Quality']<-as.numeric(data[,'Genotype_Quality'])
   data[,'Mapping_Quality_Zero_Reads']<-as.numeric(data[,'Mapping_Quality_Zero_Reads'])
   data[,'Filters']<-as.factor(data[,'Filters'])
