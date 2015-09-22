@@ -64,6 +64,8 @@ shinyUI(
                           ),
                           fluidRow(
                             column(12,
+                                   div(downloadButton('downloadSelection', label = "Download selection (CSV)",class = NULL),
+                                       align="right"),
                                    uiOutput("showVarPhenotypeUI"),
                                    dataTableOutput('phenotypesTable'),
                                    hr(),
