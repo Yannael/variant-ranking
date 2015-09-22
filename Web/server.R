@@ -111,6 +111,15 @@ shinyServer(function(input, output,session) {
     }
   })
   
+  output$downloadSelection <- downloadHandler(
+    filename = function() {
+      paste('variantSelection', Sys.Date(), '.zip', sep='')
+    },
+    content = function(con) {
+      write.csv(sessionvalues$data, file="variantSelection.csv", row.names=F)
+      zip(con,c('variantSelection.zip'))
+    }
+  )
   output$pivotTable<-renderRpivotTable({
     if (length(input$showVarPhenotype)>0) {
       data<-sessionvalues$data[,sapply(input$showVarPhenotype,nameToId)]
