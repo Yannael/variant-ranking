@@ -5,6 +5,11 @@ require("jsonlite")
 require('rpivotTable')
 require('plyr')
 
+source("../processing/coverage.R")
+
+Sys.setenv(SPARK_HOME="/Users/yalb/spark")
+Sys.setenv(PATH=paste0("/Users/yalb/spark/bin:/Users/yalb/spark/sbin:",Sys.getenv("PATH")))
+
 username<-'yleborgn'
 
 #load("myResults.Rdata")
@@ -75,23 +80,25 @@ loadSet<-function(db,sql) {
 
 load("../filtersTypes.Rdata")
 
-load("../analyses.Rdata")
+#load("../analyses.Rdata")
 
-analysesNames<-names(analyses)
 
 get4<-function(l) {l[[4]]}
 get1<-function(l) {l[[1]]}
 get2<-function(l) {l[[2]]}
 
-procRes<-function(results,analysisName) {
+procRes<-function(results,analysis) {
   res<-list()
   res$name<-results[[1]]
-  res$type<-results[[2]]
-  res$scores<-sapply(results[[3]],get2)
+  res$scope<-results[[2]]
+  res$start_time<-as.POSIXct(results[[3]],origin = "1970-01-01",tz="Europe/Brussels")
+  res$end_time<-as.POSIXct(results[[4]],origin = "1970-01-01",tz="Europe/Brussels")
+  res$run_time<-round(results[[5]],digits=2)
+  res$scores<-sapply(results[[6]],get2)
   
-  res$locus<-sapply(results[[3]],get1)
+  res$locus<-sapply(results[[6]],get1)
   
-  if (res$type=="singleVariant") {
+  if (res$scope=="singleVariant") {
     variantsID<-res$locus[2,]
     i.match<-match(variantsID,analyses[[analysisName]]$variantData$ID)
     scoreSummary1<-analyses[[analysisName]]$variantData[i.match,c(1,3:6,16:35)]
@@ -123,25 +130,26 @@ procRes<-function(results,analysisName) {
     res$scoreSummary<-cbind(Score=res$scores,scoreSummary1)
   }
   
-  if (res$type=="geneUnivariate") {
+  if (res$scope=="monogenic") {
+    #load(paste("analyses/",analysisName,".Rdata",sep="")
     geneID<-res$locus
-    i.match<-match(geneID,analyses[[analysisName]]$variantData$Gene_Ensembl)
-    scoreSummary1<-analyses[[analysisName]]$variantData[i.match,c(17:20)]
+    i.match<-match(geneID,analysis$variantData$Gene_Ensembl)
+    scoreSummary1<-analysis$variantData[i.match,c(17:20)]
     scoreSummary1[,'Gene_Symbol']<-paste0("<a href='http://www.ncbi.nlm.nih.gov/omim/?term=",scoreSummary1[,'Gene_Symbol'],"' target='_blank'>",scoreSummary1[,'Gene_Symbol'],"</a>")
     res$scoreSummary<-cbind(t(res$scores),scoreSummary1)
     colnames(res$scoreSummary)[1:3]<-c("Score","Score_Case","Score_Control")
   }
   
-  if (res$type=="geneBivariate") {
+  if (res$scope=="digenic") {
     genes<-ldply(res$scores[1,])
     res$scores<-res$scores[2:4,]
     geneID<-genes[,1]
-    i.match<-match(geneID,analyses[[analysisName]]$variantData$Gene_Ensembl)
-    scoreSummary1<-analyses[[analysisName]]$variantData[i.match,c(17:20)]
+    i.match<-match(geneID,analysis$variantData$Gene_Ensembl)
+    scoreSummary1<-analysis$variantData[i.match,c(17:20)]
     colnames(scoreSummary1)<-paste0(colnames(scoreSummary1),"1")
     geneID<-genes[,2]
-    i.match<-match(geneID,analyses[[analysisName]]$variantData$Gene_Ensembl)
-    scoreSummary2<-analyses[[analysisName]]$variantData[i.match,c(17:20)]
+    i.match<-match(geneID,analysis$variantData$Gene_Ensembl)
+    scoreSummary2<-analysis$variantData[i.match,c(17:20)]
     colnames(scoreSummary2)<-paste0(colnames(scoreSummary2),"2")
     scoreSummary1[,'Gene_Symbol1']<-paste0("<a href='http://www.ncbi.nlm.nih.gov/omim/?term=",scoreSummary1[,'Gene_Symbol1'],"' target='_blank'>",scoreSummary1[,'Gene_Symbol1'],"</a>")
     scoreSummary2[,'Gene_Symbol2']<-paste0("<a href='http://www.ncbi.nlm.nih.gov/omim/?term=",scoreSummary2[,'Gene_Symbol2'],"' target='_blank'>",scoreSummary2[,'Gene_Symbol2'],"</a>")
@@ -152,9 +160,12 @@ procRes<-function(results,analysisName) {
   res
 }
 
-resultsAll<-list()
-for (analysisName in analysesNames) {
-  results<-fromJSON(txt=paste0("../",analysisName,".txt"))
-  resultsAll[[analysisName]]<-list(procRes(results,analysisName))
-}
+analysesFiles<-dir("analyses/","*.Rdata")
+analysesNames<-as.vector(unlist(sapply(analysesFiles,strsplit,'.Rdata')))
+
+#resultsAll<-list()
+#for (analysisName in analysesNames) {
+#  results<-fromJSON(txt=paste0("analyses/",analysisName,".txt"))
+#  resultsAll[[analysisName]]<-list(procRes(results,analysisName))
+#}
 
