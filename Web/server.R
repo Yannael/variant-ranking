@@ -12,8 +12,6 @@ shinyServer(function(input, output,session) {
   sessionvalues$data<-loadData("")$data
   sessionvalues$samplesSets<-loadSet("samplesSets","")
   sessionvalues$nbRowsExceededWarningMessage<-""
-  sessionvalues$results<-resultsAll
-  sessionvalues$analyses<-analyses
   sessionvalues$analysesNames<-analysesNames
   sessionvalues$checkboxAddMetadata<-F
   sessionvalues$variantDataGene<-NULL
@@ -109,11 +107,11 @@ shinyServer(function(input, output,session) {
       colnames(data)<-input$showVarPhenotype
       getWidgetTable(data,session)
     }
-  })
+  },server=T)
   
   output$downloadSelection <- downloadHandler(
     filename = function() {
-      paste('variantSelection', Sys.Date(), '.zip', sep='')
+      paste('variantSelection.zip', sep='')
     },
     content = function(con) {
       write.csv(sessionvalues$data, file="variantSelection.csv", row.names=F)
@@ -148,18 +146,25 @@ shinyServer(function(input, output,session) {
   
   observe({
     input$startAnalysisButton
-    isolate({analysisName<-input$analysisName})
+    isolate({
+      analysisName<-input$analysisName
+      scope<-input$rankingScope
+      })
     if (analysisName!='') {
-      #load("analyses.Rdata")
-      #browser()
-      analyses<-sessionvalues$analyses
-      analyses[[analysisName]]<-list()
+      analysis<-list()
       
-      selectSampleGroupIndex1<-which(sessionvalues$samplesSets$group==input$selectSampleGroup1)
-      selectSampleGroupIndex2<-which(sessionvalues$samplesSets$group==input$selectSampleGroup2)
+      isolate({
+        sampleGroup1name<-input$selectSampleGroup1
+        sampleGroup2name<-input$selectSampleGroup2
+        selectSampleGroupIndex1<-which(sessionvalues$samplesSets$group==input$selectSampleGroup1)
+        selectSampleGroupIndex2<-which(sessionvalues$samplesSets$group==input$selectSampleGroup2)
+      })
       
-      analyses[[analysisName]]$group1<-sessionvalues$samplesSets[selectSampleGroupIndex1,]
-      analyses[[analysisName]]$group2<-sessionvalues$samplesSets[selectSampleGroupIndex2,]
+      analysis$group1name<-sampleGroup1name
+      analysis$group2name<-sampleGroup2name
+      
+      analysis$group1<-sessionvalues$samplesSets[selectSampleGroupIndex1,]
+      analysis$group2<-sessionvalues$samplesSets[selectSampleGroupIndex2,]
       
       controlData<-loadData(sessionvalues$samplesSets[selectSampleGroupIndex1,'sql'],noLimit=T,excludeID=F)[[1]]
       caseData<-loadData(sessionvalues$samplesSets[selectSampleGroupIndex2,'sql'],noLimit=T,excludeID=F)[[1]]
@@ -169,13 +174,16 @@ shinyServer(function(input, output,session) {
       
       variantData<-rbind(controlData,caseData)
       variantData[is.na(variantData)]<-''
-      analyses[[analysisName]]$variantData<-variantData
-      analyses[[analysisName]]$samplesID<-samplesID
-      analyses[[analysisName]]$nCases<-nCases
+      analysis$variantData<-variantData
+      analysis$samplesID<-samplesID
+      analysis$nCases<-nCases
       
-      save(file="../analyses.Rdata",analyses)
-      sessionvalues$analyses<-analyses
-      sessionvalues$analysesNames<-names(analyses)
+      save(file=paste("analyses/",analysisName,".Rdata",sep=""),analysis)
+      createGenotypeMatrix(analysisName)
+    
+      startCommand<-paste("spark-submit --master local --conf spark.eventLog.enabled=true GVR.py",analysisName,nCases,scope)
+      system(startCommand)
+      
     }  
   })
   
@@ -183,6 +191,12 @@ shinyServer(function(input, output,session) {
   ####################################################
   #Results explorer
   ####################################################
+  
+  observe({
+    input$refreshResultsButton
+    analysesFiles<-dir("analyses/","*.Rdata")
+    sessionvalues$analysesNames<-as.vector(unlist(sapply(analysesFiles,strsplit,'.Rdata')))
+  })
   
   output$selectAnalysisUI<-renderUI({
     selectInput('selectAnalysis', 'Select analysis', choices = list(
@@ -197,16 +211,16 @@ shinyServer(function(input, output,session) {
   
   output$showVarResultsUI<-renderUI({
     nameAnalysis<-input$selectAnalysis
-    if (sessionvalues$results[[nameAnalysis]][[1]]$type=="singleVariant") {
-      niceNames<-as.vector(sapply(colnames(sessionvalues$results[[nameAnalysis]][[1]]$scoreSummary),idToName))[-2]
+    if (sessionvalues$results$scope=="singleVariant") {
+      niceNames<-as.vector(sapply(colnames(sessionvalues$results$scoreSummary),idToName))[-2]
       initialSelect<-niceNames[c(1:3,7)]
     }
-    if (sessionvalues$results[[nameAnalysis]][[1]]$type=="geneUnivariate") {
-      niceNames<-as.vector(sapply(colnames(sessionvalues$results[[nameAnalysis]][[1]]$scoreSummary),idToName))
+    if (sessionvalues$results$scope=="monogenic") {
+      niceNames<-as.vector(sapply(colnames(sessionvalues$results$scoreSummary),idToName))
       initialSelect<-niceNames[1:4]
     }
-    if (sessionvalues$results[[nameAnalysis]][[1]]$type=="geneBivariate") {
-      niceNames<-as.vector(sapply(colnames(sessionvalues$results[[nameAnalysis]][[1]]$scoreSummary),idToName))
+    if (sessionvalues$results$scope=="digenic") {
+      niceNames<-as.vector(sapply(colnames(sessionvalues$results$scoreSummary),idToName))
       initialSelect<-niceNames[c(1:4,8)]
     }
     selectInput('showVarResults', 'Select variables to display', niceNames, 
@@ -214,11 +228,11 @@ shinyServer(function(input, output,session) {
   })
   
   
-  output$resultsTable<-renderDataTable({
+  output$resultsTable<-DT::renderDataTable({
     if (length(input$showVarResults)>0) {
       nameAnalysis<-input$selectAnalysis
-      if (length(setdiff(sapply(input$showVarResults,nameToId),colnames(sessionvalues$results[[nameAnalysis]][[1]]$scoreSummary)))==0) {
-        data<-sessionvalues$results[[nameAnalysis]][[1]]$scoreSummary[,sapply(input$showVarResults,nameToId)]
+      if (length(setdiff(sapply(input$showVarResults,nameToId),colnames(sessionvalues$results$scoreSummary)))==0) {
+        data<-sessionvalues$results$scoreSummary[,sapply(input$showVarResults,nameToId)]
         targetsShort<-which(colnames(data)!="Gene_Symbol")
         colnames(data)<-input$showVarResults
         #getWidgetTable(data,session,selection='single',targetsShort=c(1:6,8:25))
@@ -229,16 +243,28 @@ shinyServer(function(input, output,session) {
   
   observe({
     nameAnalysis<-input$selectAnalysis
-    if (length(input$resultsTable_rows_selected)) {
-      if (sessionvalues$results[[nameAnalysis]][[1]]$type=="singleVariant") {
-        variantsLocus<-sessionvalues$results[[nameAnalysis]][[1]]$scoreSummary[input$resultsTable_rows_selected,'ID']
-        i.match<-which(sessionvalues$analyses[[nameAnalysis]]$variantData[,'ID']==variantsLocus)
-        sessionvalues$variantDataGene<-sessionvalues$analyses[[nameAnalysis]]$variantData[i.match,-c(1)]
-      }
-      if (sessionvalues$results[[nameAnalysis]][[1]]$type=="geneUnivariate") {
-        geneID<-sessionvalues$results[[nameAnalysis]][[1]]$scoreSummary[input$resultsTable_rows_selected,'Gene_Ensembl']
-        data<-sessionvalues$analyses[[nameAnalysis]]$variantData
-        sessionvalues$variantDataGene<-data[which(data[,'Gene_Ensembl']==geneID),]
+    if (length(nameAnalysis)>0) {
+      load(paste("analyses/",nameAnalysis,".Rdata",sep=""))
+      sessionvalues$analysis<-analysis
+      sessionvalues$results<-procRes(fromJSON(txt=paste0("analyses/",nameAnalysis,".txt")),sessionvalues$analysis)
+      if (length(input$resultsTable_rows_selected)) {
+        
+        if (sessionvalues$results$scope=="singleVariant") {
+          variantsLocus<-sessionvalues$results$scoreSummary[input$resultsTable_rows_selected,'ID']
+          i.match<-which(sessionvalues$analysis$variantData[,'ID']==variantsLocus)
+          sessionvalues$variantDataGene<-sessionvalues$analysis$variantData[i.match,-c(1)]
+        }
+        if (sessionvalues$results$scope=="monogenic") {
+          geneID<-sessionvalues$results$scoreSummary[input$resultsTable_rows_selected,'Gene_Ensembl']
+          data<-sessionvalues$analysis$variantData[,-c(1)]
+          sessionvalues$variantDataGene<-data[which(data[,'Gene_Ensembl']==geneID),]
+        }
+        if (sessionvalues$results$scope=="digenic") {
+          geneID1<-sessionvalues$results$scoreSummary[input$resultsTable_rows_selected,'Gene_Ensembl1']
+          geneID2<-sessionvalues$results$scoreSummary[input$resultsTable_rows_selected,'Gene_Ensembl2']
+          data<-sessionvalues$analysis$variantData[,-c(1)]
+          sessionvalues$variantDataGene<-data[which(data[,'Gene_Ensembl']==geneID1 | data[,'Gene_Ensembl']==geneID2),]
+        }
       }
     }
   })
@@ -251,17 +277,26 @@ shinyServer(function(input, output,session) {
       if (input$checkboxAddMetadata & !sessionvalues$checkboxAddMetadata){
         sessionvalues$checkboxAddMetadata<-T
         isolate({
-          samplesID<-sessionvalues$analyses[[nameAnalysis]]$samplesID
-          if (sessionvalues$results[[nameAnalysis]][[1]]$type=="singleVariant") {
-            variantsLocus<-sessionvalues$results[[nameAnalysis]][[1]]$scoreSummary[input$resultsTable_rows_selected,'ID']
+          samplesID<-sessionvalues$analysis$samplesID
+          if (sessionvalues$results$scope=="singleVariant") {
+            variantsLocus<-sessionvalues$results$scoreSummary[input$resultsTable_rows_selected,'ID']
             data<-loadData(paste0("ID='",variantsLocus,"'"),noLimit=T)[[1]]
             data<-data[which(data[,'Sample_ID'] %in% samplesID),]
             data[is.na(data)]<-''
           }
           
-          if (sessionvalues$results[[nameAnalysis]][[1]]$type=="geneUnivariate") {
-            geneID<-sessionvalues$results[[nameAnalysis]][[1]]$scoreSummary[input$resultsTable_rows_selected,'Gene_Ensembl']
+          if (sessionvalues$results$scope=="monogenic") {
+            geneID<-sessionvalues$results$scoreSummary[input$resultsTable_rows_selected,'Gene_Ensembl']
             data<-loadData(paste0("Gene_Ensembl='",geneID,"'"),noLimit=T)[[1]]
+            data<-data[which(data[,'Sample_ID'] %in% samplesID),]
+            data[is.na(data)]<-''
+          }
+          if (sessionvalues$results$scope=="digenic") {
+            geneID1<-sessionvalues$results$scoreSummary[input$resultsTable_rows_selected,'Gene_Ensembl1']
+            geneID2<-sessionvalues$results$scoreSummary[input$resultsTable_rows_selected,'Gene_Ensembl2']
+            data1<-loadData(paste0("Gene_Ensembl='",geneID1,"'"),noLimit=T)[[1]]
+            data2<-loadData(paste0("Gene_Ensembl='",geneID2,"'"),noLimit=T)[[1]]
+            data<-rbind(data1,data2)
             data<-data[which(data[,'Sample_ID'] %in% samplesID),]
             data[is.na(data)]<-''
           }
@@ -273,15 +308,21 @@ shinyServer(function(input, output,session) {
       if (!input$checkboxAddMetadata & sessionvalues$checkboxAddMetadata){
         sessionvalues$checkboxAddMetadata<-F
         isolate({
-          if (sessionvalues$results[[nameAnalysis]][[1]]$type=="singleVariant") {
-            variantsLocus<-sessionvalues$results[[nameAnalysis]][[1]]$scoreSummary[input$resultsTable_rows_selected,'ID']
-            i.match<-which(sessionvalues$analyses[[nameAnalysis]]$variantData[,'ID']==variantsLocus)
-            data<-sessionvalues$analyses[[nameAnalysis]]$variantData[i.match,-c(1)]
+          if (sessionvalues$results$scope=="singleVariant") {
+            variantsLocus<-sessionvalues$results$scoreSummary[input$resultsTable_rows_selected,'ID']
+            i.match<-which(sessionvalues$analysis$variantData[,'ID']==variantsLocus)
+            data<-sessionvalues$analysis$variantData[i.match,-c(1)]
           }
-          if (sessionvalues$results[[nameAnalysis]][[1]]$type=="geneUnivariate") {
-            geneID<-sessionvalues$results[[nameAnalysis]][[1]]$scoreSummary[input$resultsTable_rows_selected,'Gene_Symbol']
-            i.match<-which(sessionvalues$analyses[[nameAnalysis]]$variantData[,'Gene_Symbol']==geneID)
-            data<-sessionvalues$analyses[[nameAnalysis]]$variantData[i.match,-c(1)]
+          if (sessionvalues$results$scope=="monogenic") {
+            geneID<-sessionvalues$results$scoreSummary[input$resultsTable_rows_selected,'Gene_Symbol']
+            i.match<-which(sessionvalues$analysis$variantData[,'Gene_Symbol']==geneID)
+            data<-sessionvalues$analysis$variantData[i.match,-c(1)]
+          }
+          if (sessionvalues$results$scope=="digenic") {
+            geneID1<-sessionvalues$results$scoreSummary[input$resultsTable_rows_selected,'Gene_Symbol1']
+            geneID2<-sessionvalues$results$scoreSummary[input$resultsTable_rows_selected,'Gene_Symbol2']
+            i.match<-which(sessionvalues$analysis$variantData[,'Gene_Symbol']==geneID1 | sessionvalues$analysis$variantData[,'Gene_Symbol']==geneID2)
+            data<-sessionvalues$analysis$variantData[i.match,-c(1)]
           }
         })
         sessionvalues$variantDataGene<-data
@@ -295,7 +336,7 @@ shinyServer(function(input, output,session) {
     if (length(sessionvalues$variantDataGene)>0) {
       niceNames<-as.vector(sapply(colnames(sessionvalues$variantDataGene),idToName))
       selectInput('showVarMetadata', 'Select variables to display', niceNames, 
-                  selected=niceNames[c(1:7,23:25)],multiple=TRUE, selectize=TRUE,width='1050px')
+                  selected=niceNames[c(1:7,23:25,16,37)],multiple=TRUE, selectize=TRUE,width='1050px')
     }
   })
   
@@ -305,7 +346,7 @@ shinyServer(function(input, output,session) {
       data<-sessionvalues$variantDataGene[,sapply(input$showVarMetadata,nameToId)]
       getWidgetTable(data,session)
     }
-  })
+  },server=TRUE)
   
   output$variantsMetadataPivotTable<-renderRpivotTable({
     input$checkboxAddMetadata
@@ -320,18 +361,18 @@ shinyServer(function(input, output,session) {
   output$resultsMetadata<-renderUI({
     fluidRow(
       column(3,
-             strong("Analysis name: "),br(),
              strong("Control group: "),br(),
              strong("Pathological group: "),br(),
              strong("Start time: "),br(),
-             strong("End time: ")
+             strong("End time: "),br(),
+             strong("Total run time: ")
       ),
       column(4,
-             sessionvalues$currentResults$name,br(),
-             sessionvalues$currentResults$metadata$controlgroup,br(),
-             sessionvalues$currentResults$metadata$pathogroup,br(),
-             sessionvalues$currentResults$metadata$timestart,br(),
-             sessionvalues$currentResults$metadata$timeend
+             sessionvalues$analysis$group1name,br(),
+             sessionvalues$analysis$group2name,br(),
+             sessionvalues$results$start_time,br(),
+             sessionvalues$results$end_time,br(),
+             paste(sessionvalues$results$run_time, "seconds")
       )
       
     )

@@ -89,9 +89,9 @@ shinyUI(
                                                 c("Gene" = "gene",
                                                   "Variant" = "variant"
                                                 )),
-                                   radioButtons("multivariateRankingRadio", "Interaction",
-                                                c("Univariate" = "univariate",
-                                                  "Bivariate" = "bivariate"
+                                   radioButtons("rankingScope", "Scope",
+                                                c("Monogenic" = "monogenic",
+                                                  "Digenic" = "digenic"
                                                 )),
                                    checkboxGroupInput("rankingCriterion", "Scoring function",
                                                       c("Count" = "count",
@@ -126,7 +126,8 @@ shinyUI(
                           tags$div(class="extraspace2"),
                           fluidRow(
                             column(3,
-                                   uiOutput("selectAnalysisUI")
+                                   uiOutput("selectAnalysisUI"),
+                                   actionButton("refreshResultsButton","Refresh")
                             )
                           ),
                           hr(),
