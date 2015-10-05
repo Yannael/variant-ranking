@@ -90,32 +90,28 @@ get2<-function(l) {l[[2]]}
 procRes<-function(results,analysis) {
   res<-list()
   res$name<-results[[1]]
-  res$scope<-results[[2]]
-  res$start_time<-as.POSIXct(results[[3]],origin = "1970-01-01",tz="Europe/Brussels")
-  res$end_time<-as.POSIXct(results[[4]],origin = "1970-01-01",tz="Europe/Brussels")
-  res$run_time<-round(results[[5]],digits=2)
-  res$scores<-sapply(results[[6]],get2)
-  
-  res$locus<-sapply(results[[6]],get1)
-  
-  if (res$scope=="singleVariant") {
-    variantsID<-res$locus[2,]
-    i.match<-match(variantsID,analyses[[analysisName]]$variantData$ID)
-    scoreSummary1<-analyses[[analysisName]]$variantData[i.match,c(1,3:6,16:35)]
-    scoreSummary1[,'Gene_Symbol']<-paste0("<a href='http://www.ncbi.nlm.nih.gov/omim/?term=",scoreSummary1[,'Gene_Symbol'],"' target='_blank'>",scoreSummary1[,'Gene_Symbol'],"</a>")
-    #browser()
-    if (results[[2]]=="singleVariant") {
-      #scoreSummary1<-cbind(scoreSummary1,Score=res$infovariants1[,'gene_symbol'])
-    }
-    
-    #scoreSummary2<-NULL
-    if (results[[2]]=="pairVariantsMonogenic") {
-      uniqueid2<-apply(res$locus[5:7,],2,paste,collapse=":")
-      to.keep<-match(uniqueid2,dbvariants$uniqueid)
-      res$infovariants2<-dbvariants[to.keep,]
+  res$scale<-results[[2]]
+  res$scope<-results[[3]]
+  res$start_time<-as.POSIXct(results[[4]],origin = "1970-01-01",tz="Europe/Brussels")
+  res$end_time<-as.POSIXct(results[[5]],origin = "1970-01-01",tz="Europe/Brussels")
+  res$run_time<-round(results[[6]],digits=2)
+  res$scores<-sapply(results[[7]],get2)
+  res$locus<-sapply(results[[7]],get1)
+  if (res$scale=="variant") {
+    if (res$scope=="monogenic") {
+      variantsID<-res$locus[2,]
+      i.match<-match(variantsID,analysis$variantData$ID)
+      scoreSummary<-analysis$variantData[i.match,c(1,3:6,16:35)]
+      scoreSummary[,'Gene_Symbol']<-paste0("<a href='http://www.ncbi.nlm.nih.gov/omim/?term=",scoreSummary[,'Gene_Symbol'],"' target='_blank'>",scoreSummary[,'Gene_Symbol'],"</a>")
       
-      scoreSummary2<-cbind(res$locus[5,],res$infovariants2[,'reference'],res$infovariants2[,'alternative'],res$infovariants1[,'gene_symbol'])
-      colnames(scoreSummary2)<-c("Locus2","Reference2", "Alternative2","Gene symbol")
+      #if (results[[2]]=="pairVariantsMonogenic") {
+      #  uniqueid2<-apply(res$locus[5:7,],2,paste,collapse=":")
+      #  to.keep<-match(uniqueid2,dbvariants$uniqueid)
+      #  res$infovariants2<-dbvariants[to.keep,]
+      #  
+      #  scoreSummary2<-cbind(res$locus[5,],res$infovariants2[,'reference'],res$infovariants2[,'alternative'],res$infovariants1[,'gene_symbol'])
+      #  colnames(scoreSummary2)<-c("Locus2","Reference2", "Alternative2","Gene symbol")
+      #}
     }
     
     if (results[[2]]=="pairVariantsDigenic") {
@@ -126,35 +122,39 @@ procRes<-function(results,analysis) {
       colnames(scoreSummary2)<-c("Gene symbol1","Locus2","Reference2", "Alternative2","Gene symbol2")
       
     }
+
+    res$scoreSummary<-cbind(Score=t(res$scores),scoreSummary)
+    colnames(res$scoreSummary)[1:3]<-c("Score","Score_Case","Score_Control")
     
-    res$scoreSummary<-cbind(Score=res$scores,scoreSummary1)
   }
   
-  if (res$scope=="monogenic") {
-    #load(paste("analyses/",analysisName,".Rdata",sep="")
-    geneID<-res$locus
-    i.match<-match(geneID,analysis$variantData$Gene_Ensembl)
-    scoreSummary1<-analysis$variantData[i.match,c(17:20)]
-    scoreSummary1[,'Gene_Symbol']<-paste0("<a href='http://www.ncbi.nlm.nih.gov/omim/?term=",scoreSummary1[,'Gene_Symbol'],"' target='_blank'>",scoreSummary1[,'Gene_Symbol'],"</a>")
-    res$scoreSummary<-cbind(t(res$scores),scoreSummary1)
-    colnames(res$scoreSummary)[1:3]<-c("Score","Score_Case","Score_Control")
-  }
-  
-  if (res$scope=="digenic") {
-    genes<-ldply(res$scores[1,])
-    res$scores<-res$scores[2:4,]
-    geneID<-genes[,1]
-    i.match<-match(geneID,analysis$variantData$Gene_Ensembl)
-    scoreSummary1<-analysis$variantData[i.match,c(17:20)]
-    colnames(scoreSummary1)<-paste0(colnames(scoreSummary1),"1")
-    geneID<-genes[,2]
-    i.match<-match(geneID,analysis$variantData$Gene_Ensembl)
-    scoreSummary2<-analysis$variantData[i.match,c(17:20)]
-    colnames(scoreSummary2)<-paste0(colnames(scoreSummary2),"2")
-    scoreSummary1[,'Gene_Symbol1']<-paste0("<a href='http://www.ncbi.nlm.nih.gov/omim/?term=",scoreSummary1[,'Gene_Symbol1'],"' target='_blank'>",scoreSummary1[,'Gene_Symbol1'],"</a>")
-    scoreSummary2[,'Gene_Symbol2']<-paste0("<a href='http://www.ncbi.nlm.nih.gov/omim/?term=",scoreSummary2[,'Gene_Symbol2'],"' target='_blank'>",scoreSummary2[,'Gene_Symbol2'],"</a>")
-    res$scoreSummary<-cbind(t(res$scores),scoreSummary1,scoreSummary2)
-    colnames(res$scoreSummary)[1:3]<-c("Score","Score_Case","Score_Control")
+  if (res$scale=="gene") {
+    if (res$scope=="monogenic") {
+      #load(paste("analyses/",analysisName,".Rdata",sep="")
+      geneID<-res$locus
+      i.match<-match(geneID,analysis$variantData$Gene_Ensembl)
+      scoreSummary1<-analysis$variantData[i.match,c(17:20)]
+      scoreSummary1[,'Gene_Symbol']<-paste0("<a href='http://www.ncbi.nlm.nih.gov/omim/?term=",scoreSummary1[,'Gene_Symbol'],"' target='_blank'>",scoreSummary1[,'Gene_Symbol'],"</a>")
+      res$scoreSummary<-cbind(t(res$scores),scoreSummary1)
+      colnames(res$scoreSummary)[1:3]<-c("Score","Score_Case","Score_Control")
+    }
+    
+    if (res$scope=="digenic") {
+      genes<-ldply(res$scores[1,])
+      res$scores<-res$scores[2:4,]
+      geneID<-genes[,1]
+      i.match<-match(geneID,analysis$variantData$Gene_Ensembl)
+      scoreSummary1<-analysis$variantData[i.match,c(17:20)]
+      colnames(scoreSummary1)<-paste0(colnames(scoreSummary1),"1")
+      geneID<-genes[,2]
+      i.match<-match(geneID,analysis$variantData$Gene_Ensembl)
+      scoreSummary2<-analysis$variantData[i.match,c(17:20)]
+      colnames(scoreSummary2)<-paste0(colnames(scoreSummary2),"2")
+      scoreSummary1[,'Gene_Symbol1']<-paste0("<a href='http://www.ncbi.nlm.nih.gov/omim/?term=",scoreSummary1[,'Gene_Symbol1'],"' target='_blank'>",scoreSummary1[,'Gene_Symbol1'],"</a>")
+      scoreSummary2[,'Gene_Symbol2']<-paste0("<a href='http://www.ncbi.nlm.nih.gov/omim/?term=",scoreSummary2[,'Gene_Symbol2'],"' target='_blank'>",scoreSummary2[,'Gene_Symbol2'],"</a>")
+      res$scoreSummary<-cbind(t(res$scores),scoreSummary1,scoreSummary2)
+      colnames(res$scoreSummary)[1:3]<-c("Score","Score_Case","Score_Control")
+    }
   }
   
   res
