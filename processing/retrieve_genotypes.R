@@ -72,12 +72,12 @@ createCopyHighlanderDB<-function() {
   fields_select<-paste(unique(c(fieldsInfo)),collapse=",")
   
   #For 1000g
-  subsamples<-paste0("('",paste(samples[1:3],sep="",collapse="','"),"')")
+  subsamples<-paste0("('",paste(samples[1:10],sep="",collapse="','"),"')")
   system.time(data <- dbGetQuery(highlanderdb,paste0("select ",fields_select," from ",tablename," where patient in ",subsamples)))
   
   #For ULB
   #Takes about 3 minutes
-  system.time(data <- dbGetQuery(highlanderdb,paste0("select ",fields_select," from ",tablename)))
+  #system.time(data <- dbGetQuery(highlanderdb,paste0("select ",fields_select," from ",tablename)))
   uniqueID<-paste(data$chr, data$pos, data$reference, data$alternative, sep=":")
   
   #id.redundant<-tapply(data$gene_symbol,uniqueID,length)
@@ -88,14 +88,14 @@ createCopyHighlanderDB<-function() {
   data$zygosity<-zygosity
   data<-cbind(ID=uniqueID,data)
   
-  data[is.na(data)]<-''
+  #data[is.na(data)]<-''
   colnames(data)<-c('ID',fieldsInfoNewNames)
   #data<-data[order(data[,3],data[,4]),]
   
-  variantsdb <- dbConnect(RSQLite::SQLite(), "variants.db")
+  variantsdb <- dbConnect(RSQLite::SQLite(), "variants1000.db")
   dbWriteTable(variantsdb,"variants",data,overwrite=T,row.names=F)
   
-  phenotypesdb<-dbConnect(RSQLite::SQLite(), paste0("phenotypes.db"))
+  phenotypesdb<-dbConnect(RSQLite::SQLite(), paste0("phenotypes1000.db"))
   phenotypes<-dbReadTable(phenotypesdb,"phenotypes")
   dbWriteTable(variantsdb,"phenotypes",phenotypes,overwrite=T,row.names=F)
   
@@ -105,7 +105,11 @@ createCopyHighlanderDB<-function() {
   #Remove duplicate Sample_ID column
   data<-data[,-which(colnames(data)=="Sample_ID")[2]]
   
-  data[data==""]<-NA
+  
+  for (i in 1:ncol(data)) {
+    if (class(data[,i])=="character") data[is.na(data[,i]),i]<-'\\N'
+  }
+  data[is.na(data)]<-''
   
   data[,'Chr']<-factor(data[,'Chr'],levels=c(1:22,'X','Y'))
   data[,'Change_Type']<-as.factor(data[,'Change_Type'])
@@ -137,9 +141,10 @@ createCopyHighlanderDB<-function() {
   filtersTypes<-getFiltersFromTable(data[,-1])
   save(file="filtersTypes.Rdata",filtersTypes)
   
-  datadb<-dbConnect(RSQLite::SQLite(), paste0("data.db"))
+  datadb<-dbConnect(RSQLite::SQLite(), paste0("data1000_23.db"))
   dbWriteTable(datadb,"variants",data,row.names=F,overwrite=T)
   dbDisconnect(datadb)
+  write.table(file="variants1-10.csv",data,col.names=F,row.names=F,sep=",",quote=F)
   
   missingGenes<-datawhich(data[,'Gene_Ensembl']=='')
   ID<-data[missingGenes,'ID']
