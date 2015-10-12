@@ -11,7 +11,13 @@
   height:20px;
 }
 
-
+.shiny-progress .bar {
+background-color: #4AA1FF;
+.opacity = 0.8;
+}
+.shiny-progress .progress {
+height:20px;
+}
 
 .container-fluid {
 	min-width: 1000px;

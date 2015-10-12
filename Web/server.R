@@ -10,11 +10,16 @@ library(httr)
 shinyServer(function(input, output,session) {
   sessionvalues <- reactiveValues()
   sessionvalues$data<-loadData("")$data
+  
   sessionvalues$samplesSets<-loadSet("samplesSets","")
+  sessionvalues$selectedSamplesSet<-"All"
+  sessionvalues$noUpdateFollowingSave<-F
+  
   sessionvalues$nbRowsExceededWarningMessage<-""
   sessionvalues$analysesNames<-analysesNames
   sessionvalues$checkboxAddMetadata<-F
   sessionvalues$variantDataGene<-NULL
+  
   
   ####################################################
   #Sample group manager
@@ -27,13 +32,18 @@ shinyServer(function(input, output,session) {
   output$selectSampleGroupUI<-renderUI({
     selectInput('selectedSampleGroup', 'Select filter', 
                 choices = list("Groups"=sessionvalues$samplesSets$group), 
-                selected=sessionvalues$samplesSets$group[1],
+                selected=sessionvalues$selectedSamplesSet,
                 selectize = FALSE)
   })
   
   #Select group
   observe({
     if (length(input$selectedSampleGroup)>0) {
+      withProgress(min=1, max=3, expr={
+        setProgress(message = 'Retrieving data, please wait...',
+                    value=2)
+        
+      #if (!sessionvalues$noUpdateFollowingSave) {
       selectedSampleGroupIndex<-which(sessionvalues$samplesSets$group==input$selectedSampleGroup)
       if (length(selectedSampleGroupIndex)==0) selectedSampleGroupIndex<-1
       sql<-sessionvalues$samplesSets[selectedSampleGroupIndex,2]
@@ -43,6 +53,12 @@ shinyServer(function(input, output,session) {
       data<-loadData(sql)
       sessionvalues$data<-data$data
       sessionvalues$nbRowsExceededWarningMessage<-data$nbRowsExceededWarningMessage
+      #}
+      #else {
+      #  isolate({sessionvalues$noUpdateFollowingSave<-F})
+      #}
+      
+      })
     }
   })
   
@@ -57,16 +73,20 @@ shinyServer(function(input, output,session) {
       })
       toggleModal(session, "deleteConfirmSampleGroup", toggle = "close")
       sessionvalues$samplesSets<-loadSet("samplesSets","")
-      session$sendCustomMessage(type='callbackHandlerSelectSampleGroup', "")
+      #session$sendCustomMessage(type='callbackHandlerSelectSampleGroup', "")
     }
   })
   
   #Apply filters
   observe({
     if (length(input$sqlQuerySamplesValue)) {
-      data<-loadData(input$sqlQuerySamplesValue)
-      sessionvalues$data<-data$data
-      sessionvalues$nbRowsExceededWarningMessage<-data$nbRowsExceededWarningMessage
+      withProgress(min=1, max=3, expr={
+        setProgress(message = 'Retrieving data, please wait...',
+                    value=2)
+        data<-loadData(input$sqlQuerySamplesValue)
+        sessionvalues$data<-data$data
+        sessionvalues$nbRowsExceededWarningMessage<-data$nbRowsExceededWarningMessage
+      })
     }
   })
   
@@ -74,6 +94,7 @@ shinyServer(function(input, output,session) {
   observe({
     input$samplesQuerySave2
     isolate({
+      sessionvalues$noUpdateFollowingSave<-T
       if ((length(input$sampleGoupNameSave)>0) & length(input$sqlQuerySamplesValue)>0) {
         groupsdb<-dbConnect(RSQLite::SQLite(), "../samplesSets.db")
         data<-data.frame(input$sampleGoupNameSave,input$sqlQuerySamplesValue)
@@ -81,7 +102,8 @@ shinyServer(function(input, output,session) {
         dbWriteTable(groupsdb,"samplesSets",data,append=T)
         dbDisconnect(groupsdb)
         toggleModal(session, "modalSamplesQuerySave", toggle = "close")
-        isolate({sessionvalues$samplesSets<-loadSet("samplesSets","")})
+        sessionvalues$samplesSets<-loadSet("samplesSets","")
+        sessionvalues$selectedSamplesSet<-input$sampleGoupNameSave
       }
     })
   })
