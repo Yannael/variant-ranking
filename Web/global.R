@@ -40,11 +40,24 @@ getWidgetTable<-function(data,session,selection='none',targetsShort="_all") {
   widget
 }
 
-loadData<-function(sql,noLimit=F,excludeID=T) {
+loadPhenotypes<-function(sql) {
   
   if (sql!="") {
     sql<-paste0(" where ",sql)
     sql<-gsub(',',"','",sql)
+  }
+  condb<-dbConnect(RSQLite::SQLite(), paste0("../phenotypes.db"))
+  data<-dbGetQuery(condb,paste0("select * from phenotypes ",sql))
+  dbDisconnect(condb)
+  data
+}
+
+
+loadData<-function(sql,noLimit=F,excludeID=T) {
+  
+  if (sql!="") {
+    sql<-paste0(" where ",sql)
+    sql<-gsub(' +, +',"','",sql)
   }
   condb<-dbConnect(RSQLite::SQLite(), paste0("../data.db"))
   #nbrows<-dbGetQuery(condb,paste0("select count(*) from variants ",sql))
@@ -78,7 +91,10 @@ loadSet<-function(db,sql) {
   data
 }
 
+
 load("../filtersTypes.Rdata")
+load("../filtersPhenotypesTypes.Rdata")
+
 
 #load("../analyses.Rdata")
 
