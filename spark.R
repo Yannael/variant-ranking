@@ -7,14 +7,40 @@ Sys.setenv(HADOOP_JAR="/Users/yalb/spark/assembly/target/scala-2.10/spark-assemb
 .libPaths(c(file.path(Sys.getenv("SPARK_HOME"), "R", "lib"), .libPaths()))
 library(SparkR)
 
-sc <- sparkR.init(master="local")
+sparkEnvir <- list('spark.sql.parquet.binaryAsString'='true')
+Sys.setenv('SPARKR_SUBMIT_ARGS'='"--packages" "com.databricks:spark-csv_2.10:1.2.0" "sparkr-shell"')
+sc<-sparkR.init(master="local",sparkEnvir=sparkEnvir)
+#sc<-sparkR.init()
+#sc <- sparkR.init(master="local",sparkJars="sqlite-jdbc-3.8.11.1.jar",sparkPackages ="com.databricks:spark-csv_2.11:1.2.0")
 sqlContext <- sparkRSQL.init(sc)
+
+DF2 <- loadDF(sqlContext, "file:///Users/yalb/Projects/Github/variant-ranking/variants")  
+dim(DF2)
+registerTempTable(DF2, "DF")
+pos<-sql(sqlContext, "SELECT dbsnp_id_137 FROM DF WHERE position >= 13 AND position <= 100000 limit 2")
+pos<-sql(sqlContext, "SELECT * FROM DF where position<1000000 limit 10000")
+pos<-sql(sqlContext, "SELECT * FROM DF where position>1000000 limit 10000")
+system.time(data<-collect(pos))
+
+
+
+system.time(df <- read.df(sqlContext, "genoMat_1000000_1000_100.txt", source = "com.databricks.spark.csv"))
+system.time(dim(df))
+
+parseFields <- function(record) {
+  Sys.setlocale("LC_ALL", "C") # necessary for strsplit() to work correctly
+  parts <- strsplit(record, " ")[[1]]
+  list(id=parts[1], title=parts[2], modified=parts[3], text=parts[4], username=parts[5])
+}
+parsedRDD <- lapply(df, parseFields)
 
 condb<-dbConnect(RSQLite::SQLite(), paste0("data.db"))
 data<-dbGetQuery(condb,paste0("select * from variants "))
 dbDisconnect(condb)
 
 save(file="data.Rdata",data)
+
+assign("classpath","/Users/yalb/Projects/Github/variant-ranking/sqlite-jdbc-3.8.11.1.jar")
 
 df <- loadDF(sqlContext, source="jdbc", url="jdbc:sqlite:samplesSets.db", dbtable="schema.groups")
 
