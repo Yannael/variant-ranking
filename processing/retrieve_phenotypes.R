@@ -1,11 +1,11 @@
 getPheno1000Genome<-function() {
   
-  load("web/samplesID1000Gen.Rdata")
-  pedigre_data<-read.table("Web/20130606_g1k.ped",sep="\t",header=TRUE,stringsAsFactors=F)
+  load("samplesID1000Gen.Rdata")
+  pedigre_data<-read.table("20130606_g1k.ped",sep="\t",header=TRUE,stringsAsFactors=F)
   
   require(rvest)
   require(magrittr)
-  pop_spec<-html("http://www.1000genomes.org/category/frequently-asked-questions/population")
+  pop_spec<-read_html("http://www.1000genomes.org/category/frequently-asked-questions/population")
   pop_spec<-pop_spec %>% html_nodes("td")%>%html_text%>%matrix(ncol=6,byrow=T)
   match.pop.spop<-pop_spec[-1,c(1,3)]
   
@@ -62,6 +62,10 @@ getPhenoData<-function() {
   data[,6]<-as.factor(data[,6])
   filtersPhenotypesTypes<-getFiltersFromTable(data)
   save(file="filtersPhenotypesTypes.Rdata",filtersPhenotypesTypes)
+  
+  condb<-dbConnect(RSQLite::SQLite(), paste0("data.db"))
+  dbWriteTable(condb,"phenotypes",phenotypes,row.names=F,overwrite=T) #228MB
+  dbDisconnect(condb)
   
 }
 
