@@ -72,7 +72,7 @@ createCopyHighlanderDB<-function() {
   fields_select<-paste(unique(c(fieldsInfo)),collapse=",")
   
   #For 1000g
-  subsamples<-paste0("('",paste(samples[1:10],sep="",collapse="','"),"')")
+  subsamples<-paste0("('",paste(samples[1:100],sep="",collapse="','"),"')") #75s
   system.time(data <- dbGetQuery(highlanderdb,paste0("select ",fields_select," from ",tablename," where patient in ",subsamples)))
   
   #For ULB
@@ -141,10 +141,10 @@ createCopyHighlanderDB<-function() {
   filtersTypes<-getFiltersFromTable(data[,-1])
   save(file="filtersTypes.Rdata",filtersTypes)
   
-  datadb<-dbConnect(RSQLite::SQLite(), paste0("data1000_23.db"))
+  datadb<-dbConnect(RSQLite::SQLite(), paste0("data1000.db"))
   dbWriteTable(datadb,"variants",data,row.names=F,overwrite=T)
   dbDisconnect(datadb)
-  write.table(file="variants1-10.csv",data,col.names=F,row.names=F,sep=",",quote=F)
+  write.table(file="variantsULB.csv",data,col.names=F,row.names=F,sep=",",quote=F)
   
   missingGenes<-datawhich(data[,'Gene_Ensembl']=='')
   ID<-data[missingGenes,'ID']
@@ -163,3 +163,24 @@ dummy2<-function() {
   system.time(data<-dbGetQuery(datadb,paste0("select count(*) from variants,phenotypes where variants.Sample_ID=phenotypes.Sample_ID")))
   
 }
+
+dummy3<-function() {
+  
+  condb<-dbConnect(RSQLite::SQLite(), paste0("data.db")) #1,34GB
+  system.time(data<-dbGetQuery(condb,paste0("select count(*) from variants"))) #1,5 - 6M rows
+  system.time(data<-dbGetQuery(condb,paste0("select * from variants"))) #45s
+  system.time(write.table(file="variantsULB.csv",data,col.names=F,row.names=F,sep=",",quote=F)) #102s, 1,39GB
+  
+}
+
+retrieveFromImpala<-function() {
+  #Using impala.script4
+  system.time(data<-read.csv("subset_variants.csv",sep=",",stringsAsFactors=F)) #1M, 30s
+  
+  condb<-dbConnect(RSQLite::SQLite(), paste0("phenotypes.db"))
+  dbWriteTable(condb,"phenotypes",data,row.names=F,overwrite=T) #228MB
+  dbDisconnect(condb)
+  
+  
+}
+
