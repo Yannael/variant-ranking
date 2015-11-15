@@ -7,86 +7,27 @@ library(shinyBS)
 library(rpivotTable)
 library(httr)
 
+source("filterPhenotypes.R")
+source("filterVariants.R")
+
 shinyServer(function(input, output,session) {
   sessionvalues <- reactiveValues()
   sessionvalues$variants<-loadData("")$data
   sessionvalues$phenotypes<-loadPhenotypes("")
-  
-  sessionvalues$variantsSets<-loadSet("variantsSets","")
-  sessionvalues$phenotypesSets<-loadSet("phenotypesSets","")
-  sessionvalues$selectedVariantsSet<-"All"
-  sessionvalues$selectedPhenotypesSet<-"All"
-  sessionvalues$noUpdateFollowingSave<-F
   
   sessionvalues$nbRowsExceededWarningMessage<-""
   sessionvalues$analysesNames<-analysesNames
   sessionvalues$checkboxAddMetadata<-F
   sessionvalues$variantDataGene<-NULL
   
+  output<-createFilterPhenotype(input,output,session)
+  output<-createFilterVariant(input,output,session)
+  
   
   ####################################################
   #Phenotypes group manager
   ####################################################
   
-  output$selectPhenotypesGroupUI<-renderUI({
-    selectInput('selectedPhenotypesGroup', 'Select sample group', 
-                choices = list("Groups"=sessionvalues$phenotypesSets$group), 
-                selected=sessionvalues$selectedPhenotypesSet,
-                selectize = FALSE)
-  })
-  
-  #Select group
-  observe({
-    if (length(input$selectedPhenotypesGroup)>0) {
-      selectedPhenotypesGroupIndex<-which(sessionvalues$phenotypesSets$group==input$selectedPhenotypesGroup)
-      if (length(selectedPhenotypesGroupIndex)==0) selectedPhenotypesGroupIndex<-1
-      sql<-sessionvalues$phenotypesSets[selectedPhenotypesGroupIndex,2]
-      sqlQuery<-sql
-      if (sqlQuery=="") sqlQuery<-"reset"
-      session$sendCustomMessage(type='callbackHandlerSelectPhenotypesGroup', sqlQuery)
-      sessionvalues$phenotypes<-loadPhenotypes(sql)
-    }
-  })
-  
-  #Delete group
-  observe({
-    if (length(input$deleteConfirmYesButtonPhenotypesGroup)>0 & input$deleteConfirmYesButtonPhenotypesGroup) {
-      isolate({
-        sessionvalues$phenotypesSets<-sessionvalues$phenotypesSets[-which(sessionvalues$phenotypesSets$group==input$selectedPhenotypesGroup),]
-        groupsdb<-dbConnect(RSQLite::SQLite(), "../phenotypesSets.db")
-        dbWriteTable(groupsdb,"phenotypesSets",sessionvalues$phenotypesSets,overwrite=T,row.names=F)
-        dbDisconnect(groupsdb)
-      })
-      toggleModal(session, "deleteConfirmPhenotypesGroup", toggle = "close")
-      sessionvalues$phenotypes<-loadSet("phenotypesSets","")
-      #session$sendCustomMessage(type='callbackHandlerSelectSampleGroup', "")
-    }
-  })
-  
-  #Apply filters
-  observe({
-    if (length(input$sqlQueryPhenotypesValue)) {
-      sessionvalues$phenotypes<-loadPhenotypes(input$sqlQueryPhenotypesValue)
-    }
-  })
-  
-  #Save
-  observe({
-    input$phenotypesQuerySave2
-    isolate({
-      sessionvalues$noUpdateFollowingSave<-T
-      if ((length(input$phenotypesGoupNameSave)>0) & length(input$sqlQueryPhenotypesValue)>0) {
-        groupsdb<-dbConnect(RSQLite::SQLite(), "../phenotypesSets.db")
-        data<-data.frame(input$phenotypesGoupNameSave,input$sqlQueryPhenotypesValue)
-        colnames(data)<-c("group","sql")
-        dbWriteTable(groupsdb,"phenotypesSets",data,append=T)
-        dbDisconnect(groupsdb)
-        toggleModal(session, "modalPhenotypesQuerySave", toggle = "close")
-        sessionvalues$phenotypesSets<-loadSet("phenotypesSets","")
-        sessionvalues$selectedPhenotypesSet<-input$phenotypesGoupNameSave
-      }
-    })
-  })
   
   #Get IDs samples
   output$listSamplesIDs<-renderText({
@@ -95,10 +36,9 @@ shinyServer(function(input, output,session) {
     result
   })
   
-  output$queryBuilderPhenotypes<-renderQueryBuildR({
-    filters<-filtersPhenotypesTypes
-    rules<-NULL
-    queryBuildR(rules,filters)
+  observe({
+    if (length(input$filterPhenotypeQueryBuilderSQL)>0)
+      sessionvalues$phenotypes<-loadPhenotypes(input$filterPhenotypeQueryBuilderSQL)
   })
   
   output$showVarPhenotypesUI<-renderUI({
@@ -144,83 +84,17 @@ shinyServer(function(input, output,session) {
     sessionvalues$nbRowsExceededWarningMessage
   })
   
-  output$selectVariantsGroupUI<-renderUI({
-    selectInput('selectedVariantsGroup', 'Select filter', 
-                choices = list("Groups"=sessionvalues$variantsSets$group), 
-                selected=sessionvalues$selectedVariantsSet,
-                selectize = FALSE)
-  })
-  
-  #Select group
-  observe({
-    if (length(input$selectedVariantsGroup)>0) {
-      withProgress(min=1, max=3, expr={
-        setProgress(message = 'Retrieving data, please wait...',
-                    value=2)
-        
-        #if (!sessionvalues$noUpdateFollowingSave) {
-        selectedVariantsGroupIndex<-which(sessionvalues$variantsSets$group==input$selectedVariantsGroup)
-        if (length(selectedVariantsGroupIndex)==0) selectedVariantsGroupIndex<-1
-        sql<-sessionvalues$variantsSets[selectedVariantsGroupIndex,2]
-        sqlQuery<-sql
-        if (sqlQuery=="") sqlQuery<-"reset"
-        session$sendCustomMessage(type='callbackHandlerSelectVariantsGroup', sqlQuery)
-        data<-loadData(sql)
-        sessionvalues$variants<-data$data
-        sessionvalues$nbRowsExceededWarningMessage<-data$nbRowsExceededWarningMessage
-      })
-    }
-  })
-  
-  #Delete group
-  observe({
-    if (length(input$deleteConfirmYesButtonVariantsGroup)>0 & input$deleteConfirmYesButtonVariantsGroup) {
-      isolate({
-        sessionvalues$variantsSets<-sessionvalues$variantsSets[-which(sessionvalues$variantsSets$group==input$selectedVariantsGroup),]
-        groupsdb<-dbConnect(RSQLite::SQLite(), "../variantsSets.db")
-        dbWriteTable(groupsdb,"variantsSets",sessionvalues$variantsSets,overwrite=T,row.names=F)
-        dbDisconnect(groupsdb)
-      })
-      toggleModal(session, "deleteConfirmVariantsGroup", toggle = "close")
-      sessionvalues$variantsSets<-loadSet("variantsSets","")
-    }
-  })
-  
   #Apply filters
   observe({
-    if (length(input$sqlQueryVariantsValue)) {
+    if (length(input$filterVariantQueryBuilderSQL)) {
       withProgress(min=1, max=3, expr={
         setProgress(message = 'Retrieving data, please wait...',
                     value=2)
-        data<-loadData(input$sqlQueryVariantsValue)
+        data<-loadData(input$filterVariantQueryBuilderSQL)
         sessionvalues$variants<-data$data
         sessionvalues$nbRowsExceededWarningMessage<-data$nbRowsExceededWarningMessage
       })
     }
-  })
-  
-  #Save
-  observe({
-    input$variantsQuerySave2
-    isolate({
-      sessionvalues$noUpdateFollowingSave<-T
-      if ((length(input$variantsGoupNameSave)>0) & length(input$sqlQueryVariantsValue)>0) {
-        groupsdb<-dbConnect(RSQLite::SQLite(), "../variantsSets.db")
-        data<-data.frame(input$variantsGoupNameSave,input$sqlQueryVariantsValue)
-        colnames(data)<-c("group","sql")
-        dbWriteTable(groupsdb,"variantsSets",data,append=T)
-        dbDisconnect(groupsdb)
-        toggleModal(session, "modalVariantsQuerySave", toggle = "close")
-        sessionvalues$variantsSets<-loadSet("variantsSets","")
-        sessionvalues$selectedvariantsSet<-input$variantsGoupNameSave
-      }
-    })
-  })
-  
-  output$queryBuilderVariants<-renderQueryBuildR({
-    filters<-filtersTypes
-    rules<-NULL
-    queryBuildR(rules,filters)
   })
   
   output$showVarVariantsUI<-renderUI({
@@ -330,7 +204,7 @@ shinyServer(function(input, output,session) {
   
   observe({
     input$refreshResultsButton
-    analysesFiles<-dir("analyses2/","*.txt")
+    analysesFiles<-dir("analyses/","*.txt")
     sessionvalues$analysesNames<-as.vector(unlist(sapply(analysesFiles,strsplit,'.txt')))
   })
   
@@ -389,7 +263,7 @@ shinyServer(function(input, output,session) {
     nameAnalysis<-input$selectAnalysis
     if (length(nameAnalysis)>0) {
       #sessionvalues$analysis<-analysis
-      sessionvalues$results<-procRes(fromJSON(txt=paste0("analyses2/",nameAnalysis,".txt")))
+      sessionvalues$results<-procRes(fromJSON(txt=paste0("analyses/",nameAnalysis,".txt")))
       if (length(input$resultsTable_rows_selected)) {
         withProgress(min=1, max=4, expr={
           setProgress(message = 'Retrieving control data, please wait...',
@@ -564,8 +438,6 @@ shinyServer(function(input, output,session) {
                )
              )
       )
-      
-      #DT::dataTableOutput('tt')
     )
     
   })

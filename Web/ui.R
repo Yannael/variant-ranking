@@ -25,49 +25,14 @@ shinyUI(
                           tags$div(class="extraspace2"),
                           fluidRow(
                             column(12,
-                                   uiOutput("selectPhenotypesGroupUI"),
-                                   queryBuildROutput("queryBuilderPhenotypes",width="970px",height="100%"),
-                                   actionButton("phenotypesQueryApply", label = "Apply filter"),
-                                   tags$script('
-                                               function sqlQueryPhenotypesFunction() {
-                                               var sqlQuerySamples = $("#queryBuilderPhenotypes").queryBuilder("getSQL", false);
-                                               Shiny.onInputChange("sqlQueryPhenotypesValue", sqlQuerySamples);
-                                               };
-                                               document.getElementById("phenotypesQueryApply").onclick = function() {sqlQueryPhenotypesFunction()};
-                                               //   document.getElementById("phenotypesQuerySave").onclick = function() {sqlQueryPhenotypesFunction()}
-                                               '),
-                                   tags$script('            
-                                               Shiny.addCustomMessageHandler("callbackHandlerSelectPhenotypesGroup",  function(sqlQuery) {
-                                               if (sqlQuery=="reset") $("#queryBuilderPhenotypes").queryBuilder("reset")
-                                               else $("#queryBuilderPhenotypes").queryBuilder("setRulesFromSQL",sqlQuery);
-                                               });
-                                               '),
-                                   actionButton("phenotypesQuerySave", label = "Save filter"),
-                                   tags$script('
-                                               document.getElementById("phenotypesQuerySave").onclick = function() {sqlQueryPhenotypesFunction()}
-                                               '),
-                                   bsModal("modalPhenotypesQuerySave", "Save sample group", "phenotypesQuerySave", 
-                                           size = "small",
-                                           textInput("phenotypesGoupNameSave", "Save sample group as :", value = ""),
-                                           actionButton("phenotypesQuerySave2", label = "Save")
-                                   ),
-                                   actionButton("deleteButtonPhenotypesGroup", label = "Delete sample group"),
-                                   bsModal("deleteConfirmPhenotypesGroup", "Are you sure?", "deleteButtonPhenotypesGroup", 
-                                           size = "small",
-                                           actionButton("deleteConfirmYesButtonPhenotypesGroup", label="Yes")
-                                   ),
-                                   actionButton("getIDButtonPhenotypesGroup", label = "Get sample IDs"),
+                                   uiOutput("filterPhenotype"),
+                                   div(
+                                     actionButton("getIDButtonPhenotypesGroup", label = "Get sample IDs"),
+                                    downloadButton('downloadPhenotypesSelection', label = "Download selection (CSV)",class = NULL),
+                                       align="right"),
                                    bsModal("getIDPhenotypesGroup", "List of sample IDs", "getIDButtonPhenotypesGroup", 
                                            size = "large",textOutput('listSamplesIDs')
-                                   )
-                                   
-                                   )
                                    ),
-                          hr(),
-                          fluidRow(
-                            column(12,
-                                   div(downloadButton('downloadPhenotypesSelection', label = "Download selection (CSV)",class = NULL),
-                                       align="right"),
                                    uiOutput("showVarPhenotypesUI"),
                                    dataTableOutput('phenotypesTable'),
                                    hr(),
@@ -81,48 +46,8 @@ shinyUI(
                         tags$div(class="extraspace2"),
                         fluidRow(
                           column(12,
-                                 uiOutput("selectVariantsGroupUI"),
-                                 queryBuildROutput("queryBuilderVariants",width="970px",height="100%"),
-                                 actionButton("variantsQueryApply", label = "Apply filter"),
-                                 tags$script('
-                                             function sqlQueryVariantsFunction() {
-                                             var sqlQueryVariants = $("#queryBuilderVariants").queryBuilder("getSQL", false);
-                                             Shiny.onInputChange("sqlQueryVariantsValue", sqlQueryVariants);
-                                             };
-                                             document.getElementById("variantsQueryApply").onclick = function() {sqlQueryVariantsFunction()};
-                                             //   document.getElementById("variantsQuerySave").onclick = function() {sqlQueryVariantsFunction()}
-                                             '),
-                                 tags$script('            
-                                             Shiny.addCustomMessageHandler("callbackHandlerSelectVariantsGroup",  function(sqlQuery) {
-                                             if (sqlQuery=="reset") $("#queryBuilderVariants").queryBuilder("reset")
-                                             else $("#queryBuilderVariants").queryBuilder("setRulesFromSQL",sqlQuery);
-                                             });
-                                             '),
-                                 actionButton("variantsQuerySave", label = "Save filter"),
-                                 tags$script('
-                                             document.getElementById("variantsQuerySave").onclick = function() {sqlQueryVariantsFunction()}
-                                             '),
-                                 bsModal("modalVariantsQuerySave", "Save variant group", "variantsQuerySave", 
-                                         size = "small",
-                                         textInput("variantsGoupNameSave", "Save variant group as :", value = ""),
-                                         actionButton("variantsQuerySave2", label = "Save")
-                                 ),
-                                 actionButton("deleteButtonVariantsGroup", label = "Delete variant group"),
-                                 bsModal("deleteConfirmVariantsGroup", "Are you sure?", "deleteButtonVariantsGroup", 
-                                         size = "small",
-                                         actionButton("deleteConfirmYesButtonVariantsGroup", label="Yes")
-                                 )
-                                 
-                                 )
-                                 ),
-                        hr(),
-                        fluidRow(
-                          column(12,
-                                 h5(textOutput("nbRowsExceededWarningMessage"))
-                          )
-                        ),
-                        fluidRow(
-                          column(12,
+                                 uiOutput("filterVariant"),
+                                 h5(textOutput("nbRowsExceededWarningMessage")),
                                  div(downloadButton('downloadVariantsSelection', label = "Download selection (CSV)",class = NULL),
                                      align="right"),
                                  uiOutput("showVarVariantsUI"),
