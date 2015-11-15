@@ -86,22 +86,6 @@ loadData<-function(sql,noLimit=F,excludeID=T) {
   results
 }
 
-loadSet<-function(db,sql) {
-  
-  if (sql!="") {
-    sql<-paste0("where ",sql)
-    sql<-gsub(',',"','",sql)
-  }
-  condb<-dbConnect(RSQLite::SQLite(), paste0("../",db,".db"))
-  data<-dbGetQuery(condb,paste0("select * from ",db," ",sql," limit 100000"))
-  dbDisconnect(condb)
-  data
-}
-
-
-load("../filtersTypes.Rdata")
-load("../filtersPhenotypesTypes.Rdata")
-
 
 get4<-function(l) {l[[4]]}
 get1<-function(l) {l[[1]]}
@@ -174,7 +158,7 @@ procRes<-function(results) {
   res
 }
 
-analysesFiles<-dir("analyses2/","*.*")
+analysesFiles<-dir("analyses/","*.*")
 analysesNames<-as.vector(unlist(sapply(analysesFiles,strsplit,'.txt')))
 
 #resultsAll<-list()
