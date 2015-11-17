@@ -25,6 +25,11 @@ shinyUI(
                           tags$div(class="extraspace2"),
                           fluidRow(
                             column(12,
+                                   div(actionButton('connectCliniPhenome', label = "Connect CliniPhenome",class = NULL),
+                                       align="right"),
+                                   bsModal("cliniPhenomeBS", "Answer from CliniPhenome", "connectCliniPhenome", 
+                                           size = "large",htmlOutput('answerCliniPhenome')
+                                   ),
                                    uiOutput("filterPhenotype"),
                                    div(
                                      actionButton("getIDButtonPhenotypesGroup", label = "Get sample IDs"),

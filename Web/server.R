@@ -29,6 +29,16 @@ shinyServer(function(input, output,session) {
   ####################################################
   
   
+  output$answerCliniPhenome<-renderText({
+    a<-POST(CliniPhenomeAPI,body=list(ontid="Autistic"))
+    try(doc <- htmlParse(a),silent=T)
+    tableNodes <- getNodeSet(doc[3]$children$html, "//sample")
+    
+    data<-paste0(sapply(tableNodes,xmlValue),sep='<br>',collapse="")
+    data
+  })
+  
+  
   #Get IDs samples
   output$listSamplesIDs<-renderText({
     listIDs<-sessionvalues$phenotypes$Sample_ID
@@ -137,16 +147,18 @@ shinyServer(function(input, output,session) {
   ####################################################
   
   output$selectSampleGroup1UI<-renderUI({
+    variantsGroup<-read.table(("filterVariant.csv"),header=T,stringsAsFactors=F,colClasses=c("character","character"))
     selectInput('selectSampleGroup1', 'Control group', 
-                choices = list("Groups"=sessionvalues$variantsSets$group), 
-                selected=sessionvalues$variantsSets$group[1],
+                choices = list("Groups"=variantsGroup$Name), 
+                selected=variantsGroup$Name[1],
                 selectize = FALSE)
   })
   
   output$selectSampleGroup2UI<-renderUI({
+    variantsGroup<-read.table(("filterVariant.csv"),header=T,stringsAsFactors=F,colClasses=c("character","character"))
     selectInput('selectSampleGroup2', 'Case group', 
-                choices = list("Groups"=sessionvalues$variantsSets$group), 
-                selected=sessionvalues$variantsSets$group[1],
+                choices = list("Groups"=variantsGroup$Name), 
+                selected=variantsGroup$Name[1],
                 selectize = FALSE)
   })
   
@@ -160,38 +172,24 @@ shinyServer(function(input, output,session) {
     
     if (analysisName!='') {
       analysis<-list()
+      variantsGroup<-read.table(("filterVariant.csv"),header=T,stringsAsFactors=F,colClasses=c("character","character"))
       
       isolate({
         sampleGroup1name<-input$selectSampleGroup1
         sampleGroup2name<-input$selectSampleGroup2
-        selectSampleGroupIndex1<-which(sessionvalues$variantsSets$group==input$selectSampleGroup1)
-        selectSampleGroupIndex2<-which(sessionvalues$variantsSets$group==input$selectSampleGroup2)
       })
       
-      analysis$group1name<-sampleGroup1name
-      analysis$group2name<-sampleGroup2name
+      selectSampleGroupIndex1<-which(variantsGroup$Name==sampleGroup1name)
+      selectSampleGroupIndex2<-which(variantsGroup$Name==sampleGroup2name)
       
-      analysis$group1<-sessionvalues$variantsSets[selectSampleGroupIndex1,]
-      analysis$group2<-sessionvalues$variantsSets[selectSampleGroupIndex2,]
+      group1sql<-variantsGroup$SQL[selectSampleGroupIndex1]
+      group2sql<-variantsGroup$SQL[selectSampleGroupIndex2]
       
-      #browser()
+      group1sql<-preprocSQL(group1sql)
+      group2sql<-preprocSQL(group2sql)
       
-      controlData<-loadData(sessionvalues$variantsSets[selectSampleGroupIndex1,'sql'],noLimit=T,excludeID=F)[[1]]
-      caseData<-loadData(sessionvalues$variantsSets[selectSampleGroupIndex2,'sql'],noLimit=T,excludeID=F)[[1]]
-      
-      samplesID<-c(unique(caseData[,'Sample_ID']),unique(controlData[,'Sample_ID']))
-      nCases<-length(unique(caseData[,'Sample_ID']))
-      
-      variantData<-rbind(controlData,caseData)
-      variantData[is.na(variantData)]<-''
-      analysis$variantData<-variantData
-      analysis$samplesID<-samplesID
-      analysis$nCases<-nCases
-      
-      save(file=paste("analyses/",analysisName,".Rdata",sep=""),analysis)
-      createGenotypeMatrix(analysisName)
-      
-      startCommand<-paste("spark-submit --master local --conf spark.eventLog.enabled=true GVR.py",analysisName,nCases,scope,scale)
+      startCommand<-paste('spark-submit --master local --conf spark.eventLog.enabled=true GVR.py','"',analysisName,"\"",scope,scale,"\"",group1sql,"\"","\"",group2sql,'"')
+      browser()
       system(startCommand)
       
     }  
@@ -213,11 +211,6 @@ shinyServer(function(input, output,session) {
       "Available analyses" = sessionvalues$analysesNames
     ), selected=sessionvalues$analysesNames[1],selectize = FALSE)
   })
-  
-  dummy<-function() {
-    r <- POST("http://api.omim.org/api/apiKey",query = list(apiKey = "DE2F57B0E7899D4D81351AFCFE44914C610ABF03"))
-    res <- GET("http://api.omim.org/api/gene",query = list(search = "mental"))  
-  }
   
   output$showVarResultsUI<-renderUI({
     nameAnalysis<-input$selectAnalysis
@@ -262,7 +255,6 @@ shinyServer(function(input, output,session) {
   observe({
     nameAnalysis<-input$selectAnalysis
     if (length(nameAnalysis)>0) {
-      #sessionvalues$analysis<-analysis
       sessionvalues$results<-procRes(fromJSON(txt=paste0("analyses/",nameAnalysis,".txt")))
       if (length(input$resultsTable_rows_selected)) {
         withProgress(min=1, max=4, expr={
