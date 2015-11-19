@@ -6,19 +6,38 @@ require('rpivotTable')
 require('plyr')
 library(RJDBC)
 
-source("../processing/coverage.R")
+CliniPhenomeAPI<-"http://192.168.99.100:81/cp_api2.php"
+IMPALA_CLASSPATH<-"impala-jdbc-0.5-2"
+
+#BridgeIris server
+#SPARK_HOME<-"/home/guest/spark-1.5.1"
+#IMPALA_SERVER<-"jdbc:hive2://127.0.0.1:21050/;auth=noSasl"
+#VARIANTS_TABLE<-"gvr.test"
+
+#Cluster
+SPARK_HOME<-"/home/yleborgn/spark"
+IMPALA_SERVER<-"jdbc:hive2://127.0.0.1:21050/;auth=noSasl"
+VARIANTS_TABLE<-"gvr4.variants"
+
+#Cluster local
+SPARK_HOME<-"/Users/yalb/spark"
+IMPALA_SERVER<-"jdbc:hive2://127.0.0.1:21050/;auth=noSasl"
+VARIANTS_TABLE<-"gvr4.variants"
+
+#Docker local
+#SPARK_HOME<-"/Users/yalb/spark"
+#IMPALA_SERVER<-"jdbc:hive2://192.168.99.100:21050/;auth=noSasl"
+#VARIANTS_TABLE<-"gvr.test"
 
 drv <- JDBC(driverClass = "org.apache.hive.jdbc.HiveDriver",
-            classPath = list.files("/Users/yalb/Downloads/impala-jdbc-0.5-2",pattern="jar$",full.names=T),
+                        classPath = list.files(IMPALA_CLASSPATH,pattern="jar$",full.names=T),
             identifier.quote="`")
 
 
-Sys.setenv(SPARK_HOME="/Users/yalb/spark")
-Sys.setenv(PATH=paste0("/Users/yalb/spark/bin:/Users/yalb/spark/sbin:",Sys.getenv("PATH")))
+Sys.setenv(SPARK_HOME=SPARK_HOME)
+Sys.setenv(PATH=paste0(SPARK_HOME,"/bin:",SPARK_HOME,"/sbin:",Sys.getenv("PATH")))
 
 username<-'yleborgn'
-
-#load("myResults.Rdata")
 
 getWidgetTable<-function(data,session,selection='none',targetsShort="_all") {
   action <- dataTableAjax(session, data,rownames=F)
@@ -52,22 +71,24 @@ loadPhenotypes<-function(sql) {
     sql<-paste0(" where ",sql)
     sql<-gsub(',',"','",sql)
   }
-  condb<-dbConnect(RSQLite::SQLite(), paste0("../phenotypes.db"))
+  condb<-dbConnect(RSQLite::SQLite(), paste0("phenotypes.db"))
   data<-dbGetQuery(condb,paste0("select * from phenotypes ",sql))
   dbDisconnect(condb)
   data
 }
 
-
-loadData<-function(sql,noLimit=F,excludeID=T) {
-  
+preprocSQL<-function(sql) {
   if (sql!="") {
     sql<-paste0(" where ",sql)
     sql<-gsub(' *, *',"','",sql)
   }
-  #condb<-dbConnect(RSQLite::SQLite(), paste0("../data.db"))
-  #condb <- dbConnect(drv, "jdbc:hive2://192.168.99.101:21050/;auth=noSasl")
-  condb <- dbConnect(drv, "jdbc:hive2://127.0.0.1:21050/;auth=noSasl")
+  sql
+}
+
+loadData<-function(sql,noLimit=F,excludeID=T) {
+  
+  sql<-preprocSQL(sql)
+  condb <- dbConnect(drv,IMPALA_SERVER )
   
   #nbrows<-dbGetQuery(condb,paste0("select count(*) from variants ",sql))
   nbrows<-1000
@@ -75,11 +96,10 @@ loadData<-function(sql,noLimit=F,excludeID=T) {
   else limit<-" limit 1000"
   nbRowsExceededWarningMessage<-""
   if (nbrows>1000) {
-    nbRowsExceededWarningMessage<-paste0("Query returns ",nbrows," records. First 100000 retrieved.")
+    nbRowsExceededWarningMessage<-paste0("Query returns ",nbrows," records. First 1000 retrieved.")
   }
   
-  #data<-dbGetQuery(condb,paste0("select * from variants ",sql,limit))
-  data<-dbGetQuery(condb,paste0("select * from gvr4.variants ",sql,limit))
+  data<-dbGetQuery(condb,paste0("select * from ",VARIANTS_TABLE," ",sql,limit))
   
   dbDisconnect(condb)
   results<-list(data=data,nbRowsExceededWarningMessage=nbRowsExceededWarningMessage)
@@ -161,9 +181,4 @@ procRes<-function(results) {
 analysesFiles<-dir("analyses/","*.*")
 analysesNames<-as.vector(unlist(sapply(analysesFiles,strsplit,'.txt')))
 
-#resultsAll<-list()
-#for (analysisName in analysesNames) {
-#  results<-fromJSON(txt=paste0("analyses/",analysisName,".txt"))
-#  resultsAll[[analysisName]]<-list(procRes(results,analysisName))
-#}
 
