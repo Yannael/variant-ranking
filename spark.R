@@ -1,27 +1,41 @@
-Sys.setenv(SPARK_HOME="/Users/yalb/spark")
-Sys.setenv(SPARK_CLASSPATH="/Users/yalb/Projects/Github/variant-ranking/sqlite-jdbc-3.8.11.1.jar")
+#Sys.setenv(SPARK_CLASSPATH="/Users/yalb/Projects/Github/variant-ranking/sqlite-jdbc-3.8.11.1.jar")
 #Sys.setenv(SPARK_HOME="/home/yleborgn/spark")
 Sys.setenv(DYLD_FALLBACK_LIBRARY_PATH="/Library/Java/JavaVirtualMachines/jdk1.7.0_80.jdk/Contents/Home/jre/lib/server/")
 Sys.setenv(HADOOP_JAR="/Users/yalb/spark/assembly/target/scala-2.10/spark-assembly-1.5.0-hadoop2.4.0.jar")
 # This line loads SparkR from the installed directory
+Sys.setenv(SPARK_HOME="/Users/yalb/spark")
 .libPaths(c(file.path(Sys.getenv("SPARK_HOME"), "R", "lib"), .libPaths()))
 library(SparkR)
 
+#Sys.setenv('SPARKR_SUBMIT_ARGS'='"--packages" "com.databricks:spark-csv_2.10:1.2.0" "sparkr-shell"')
+
 sparkEnvir <- list('spark.sql.parquet.binaryAsString'='true')
-Sys.setenv('SPARKR_SUBMIT_ARGS'='"--packages" "com.databricks:spark-csv_2.10:1.2.0" "sparkr-shell"')
-sc<-sparkR.init(master="local",sparkEnvir=sparkEnvir)
+sc<-sparkR.init(master="local[2]",sparkEnvir=sparkEnvir)
+sqlContext <- sparkRSQL.init(sc)
+sc <- sparkR.init(master="local")
+hiveContext <- sparkRHive.init(sc)
+
 #sc<-sparkR.init()
 #sc <- sparkR.init(master="local",sparkJars="sqlite-jdbc-3.8.11.1.jar",sparkPackages ="com.databricks:spark-csv_2.11:1.2.0")
-sqlContext <- sparkRSQL.init(sc)
 
 DF2 <- loadDF(sqlContext, "file:///Users/yalb/Projects/Github/variant-ranking/variants")  
+DF2 <- loadDF(sqlContext, "file:///Users/yalb/Projects/Github/variant-ranking/genotypes.db/genotypes")  
 dim(DF2)
 registerTempTable(DF2, "DF")
 pos<-sql(sqlContext, "SELECT dbsnp_id_137 FROM DF WHERE position >= 13 AND position <= 100000 limit 2")
 pos<-sql(sqlContext, "SELECT * FROM DF where position<1000000 limit 10000")
-pos<-sql(sqlContext, "SELECT * FROM DF where position>1000000 limit 10000")
+pos<-sql(sqlContext, "SELECT * FROM DF where position<10000 limit 10000")
+pos<-sql(sqlContext, "SELECT * FROM DF where v1=2 and v2=2 and v3=2 and v4=2 limit 1000000")
 system.time(data<-collect(pos))
 
+library(RJDBC)
+drv <- JDBC(driverClass = "org.apache.hive.jdbc.HiveDriver",
+            classPath = list.files("/Users/yalb/Downloads/impala-jdbc-0.5-2",pattern="jar$",full.names=T),
+            identifier.quote="`")
+conn <- dbConnect(drv, "jdbc:hive2://192.168.99.101:21050/;auth=noSasl")
+conn <- dbConnect(drv, "jdbc:hive2://127.0.0.1:21050/;auth=noSasl")
+system.time(data <- dbGetQuery(conn, "select * from gvr4.variants where position<10000 limit 100000"))
+system.time(data <- dbGetQuery(conn, "select distinct sample_id from gvr4.variants "))
 
 
 system.time(df <- read.df(sqlContext, "genoMat_1000000_1000_100.txt", source = "com.databricks.spark.csv"))
