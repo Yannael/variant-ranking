@@ -1,7 +1,7 @@
 getPheno1000Genome<-function() {
   
-  load("samplesID1000Gen.Rdata")
-  pedigre_data<-read.table("20130606_g1k.ped",sep="\t",header=TRUE,stringsAsFactors=F)
+  load("../samplesID1000Gen.Rdata")
+  pedigre_data<-read.table("../20130606_g1k.ped",sep="\t",header=TRUE,stringsAsFactors=F)
   
   require(rvest)
   require(magrittr)
@@ -26,7 +26,7 @@ getPheno1000Genome<-function() {
 getPhenoHighlander<-function() {
   #Connect to Highlander DB
   require(RMySQL)
-  source("../connectHighlander.R")
+  source("../../connectHighlander.R")
   
   #print(dbListTables(highlanderdb))
   #dbListFields(highlanderdb, 'exomes_ug')
@@ -56,16 +56,17 @@ getPhenoData<-function() {
   
   data<-phenotypes
   data[,1]<-as.factor(data[,1])
+  data[,2]<-as.charater(data[,2])
   data[,3]<-as.factor(data[,3])
   data[,4]<-as.factor(data[,4])
   data[,5]<-as.factor(data[,5])
   data[,6]<-as.factor(data[,6])
-  filtersPhenotypesTypes<-getFiltersFromTable(data)
-  save(file="filtersPhenotypesTypes.Rdata",filtersPhenotypesTypes)
+  filters<-getFiltersFromTable(data)
+  save(file="filterPhenotypeSpec.Rdata",filters)
   
-  condb<-dbConnect(RSQLite::SQLite(), paste0("data.db"))
-  dbWriteTable(condb,"phenotypes",phenotypes,row.names=F,overwrite=T) #228MB
-  dbDisconnect(condb)
+  #condb<-dbConnect(RSQLite::SQLite(), paste0("data.db"))
+  #dbWriteTable(condb,"phenotypes",phenotypes,row.names=F,overwrite=T) #228MB
+  #dbDisconnect(condb)
   
 }
 
