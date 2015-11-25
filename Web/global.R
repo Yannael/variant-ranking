@@ -15,14 +15,14 @@ IMPALA_CLASSPATH<-"impala-jdbc-0.5-2"
 #VARIANTS_TABLE<-"gvr.test"
 
 #Cluster
-SPARK_HOME<-"/home/yleborgn/spark"
-IMPALA_SERVER<-"jdbc:hive2://127.0.0.1:21050/;auth=noSasl"
-VARIANTS_TABLE<-"gvr4.variants"
+#SPARK_HOME<-"/home/yleborgn/spark"
+#IMPALA_SERVER<-"jdbc:hive2://127.0.0.1:21050/;auth=noSasl"
+#VARIANTS_TABLE<-"gvr4.variants"
 
 #Cluster local
 SPARK_HOME<-"/Users/yalb/spark"
 IMPALA_SERVER<-"jdbc:hive2://127.0.0.1:21050/;auth=noSasl"
-VARIANTS_TABLE<-"gvr4.variants"
+VARIANTS_TABLE<-"gvr4.variantsulb"
 
 #Docker local
 #SPARK_HOME<-"/Users/yalb/spark"
@@ -85,18 +85,17 @@ preprocSQL<-function(sql) {
   sql
 }
 
-loadData<-function(sql,noLimit=F,excludeID=T) {
+loadData<-function(sql,noLimit=F,maxRows=1000) {
   
   sql<-preprocSQL(sql)
   condb <- dbConnect(drv,IMPALA_SERVER )
   
-  #nbrows<-dbGetQuery(condb,paste0("select count(*) from variants ",sql))
-  nbrows<-1000
+  nbrows<-dbGetQuery(condb,paste0("select count(*) from ",VARIANTS_TABLE," ",sql))
   if (noLimit) limit<-""
-  else limit<-" limit 1000"
+  else limit<-paste0(" limit ",maxRows)
   nbRowsExceededWarningMessage<-""
-  if (nbrows>1000) {
-    nbRowsExceededWarningMessage<-paste0("Query returns ",nbrows," records. First 1000 retrieved.")
+  if (nbrows>maxRows) {
+    nbRowsExceededWarningMessage<-paste0("Warning: Query returns ",nbrows," records. First ",maxRows," retrieved.")
   }
   
   data<-dbGetQuery(condb,paste0("select * from ",VARIANTS_TABLE," ",sql,limit))
@@ -104,6 +103,14 @@ loadData<-function(sql,noLimit=F,excludeID=T) {
   dbDisconnect(condb)
   results<-list(data=data,nbRowsExceededWarningMessage=nbRowsExceededWarningMessage)
   results
+}
+
+getNbRows<-function(sql) {
+  sql<-preprocSQL(sql)
+  condb <- dbConnect(drv,IMPALA_SERVER )
+  nbrows<-dbGetQuery(condb,paste0("select count(*) from ",VARIANTS_TABLE," ",sql))
+  dbDisconnect(condb)
+  nbrows
 }
 
 
