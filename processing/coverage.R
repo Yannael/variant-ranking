@@ -27,6 +27,6 @@ createGenotypeMatrix<-function(analysisName) {
 andrea<-function() {
   
   genes<-read.table("listGenesAndrea.txt",stringsAsFactors=F)[,1]
-  genesChar<-paste(genes,sep="",collapse=",")
+  genesChar<-paste("'",genes,"'",sep="",collapse=",")
   
 }
